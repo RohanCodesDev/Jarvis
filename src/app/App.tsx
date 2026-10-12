@@ -31,11 +31,11 @@ export const App: React.FC = () => {
   });
 
   const [telemetry, setTelemetry] = useState<SystemTelemetry>({
-    cpuUsage: 4.2,
-    memoryUsageMb: 82,
-    activeModel: 'Claude 3.5 Sonnet (Stage 1 Mock)',
+    cpuUsage: 3.8,
+    memoryUsageMb: 84,
+    activeModel: 'Claude 3.5 Sonnet',
     connectionStatus: 'mock',
-    latencyMs: 14,
+    latencyMs: 12,
     speechEngine: 'browser-synthesis',
     micEnabled: true,
     speakerEnabled: true,
@@ -45,9 +45,9 @@ export const App: React.FC = () => {
     {
       id: 'msg-init-1',
       sender: 'jarvis',
-      text: 'Good day. JARVIS HUD online and standing by. Subsystems operating within normal parameters on Windows 11.',
+      text: 'Stark Industries Tactical Avionics online. Holographic quantum core initialized on Windows 11. Standing by for directives, sir.',
       timestamp: new Date().toLocaleTimeString('en-US', { hour12: false }),
-      metadata: { modelUsed: 'System Core', durationMs: 12 },
+      metadata: { modelUsed: 'Quantum Core MK-85', durationMs: 8 },
     },
   ]);
 
@@ -57,27 +57,27 @@ export const App: React.FC = () => {
       timestamp: new Date().toLocaleTimeString('en-US', { hour12: false }),
       level: 'info',
       category: 'system',
-      message: 'Electron runtime initialized. Preload sandbox active.',
+      message: 'Three.js orbital physics engine mounted. Adaptive quality enabled.',
     },
     {
       id: 'act-2',
       timestamp: new Date().toLocaleTimeString('en-US', { hour12: false }),
       level: 'success',
       category: 'security',
-      message: 'Restricted CSP verified. Node integration disabled.',
+      message: 'Sandboxed preload bridge verified. Zero privileged surface exposed.',
     },
   ]);
 
   const [memories, setMemories] = useState<UserMemoryItem[]>([
     {
       id: 'mem-1',
-      content: 'User operating on Windows 11 Intel i3 laptop environment.',
+      content: 'Hardware target: Windows 11 Intel i3 laptop, low GPU overhead.',
       category: 'system',
       createdAt: '2026-10-12 11:42',
     },
     {
       id: 'mem-2',
-      content: 'Prefers dark futuristic HUD with cyan accents and low-overhead animations.',
+      content: 'Interface preference: Stark Industries futuristic holographic HUD with Three.js 3D Orb.',
       category: 'preference',
       createdAt: '2026-10-12 11:43',
     },
@@ -85,7 +85,6 @@ export const App: React.FC = () => {
 
   const speechTimeoutRef = useRef<number | null>(null);
 
-  // Add activity log and mirror to main process via desktop bridge
   const addActivity = useCallback((level: ActivityItem['level'], category: ActivityItem['category'], message: string) => {
     const item: ActivityItem = {
       id: 'act-' + Date.now() + '-' + Math.random().toString(36).substring(2, 5),
@@ -101,30 +100,29 @@ export const App: React.FC = () => {
     }
   }, []);
 
-  // Fetch verified system info through preload bridge on mount
+  // Check desktop bridge on mount
   useEffect(() => {
     if (window.jarvisDesktop?.getSystemInfo) {
       window.jarvisDesktop.getSystemInfo().then((info) => {
-        addActivity('success', 'system', `Desktop Bridge verified: ${info.platform} (${info.arch}), Electron ${info.electronVersion}`);
+        addActivity('success', 'system', `Desktop Bridge active: ${info.platform} (${info.arch}), Electron ${info.electronVersion}`);
       }).catch((err) => {
         addActivity('warn', 'system', `Desktop bridge unavailable: ${err.message}`);
       });
     }
   }, [addActivity]);
 
-  // Periodic simulated telemetry fluctuation (low overhead, ~3s interval)
+  // Subtle telemetry pulse
   useEffect(() => {
     const timer = setInterval(() => {
       setTelemetry((prev) => ({
         ...prev,
-        cpuUsage: Number((3.5 + Math.random() * 2.5).toFixed(1)),
-        memoryUsageMb: 80 + Math.floor(Math.random() * 8),
+        cpuUsage: Number((3.2 + Math.random() * 2.1).toFixed(1)),
+        memoryUsageMb: 82 + Math.floor(Math.random() * 6),
       }));
     }, 3500);
     return () => clearInterval(timer);
   }, []);
 
-  // Stop speech playback and halt active speech
   const handleHalt = useCallback(() => {
     if (speechTimeoutRef.current) {
       clearTimeout(speechTimeoutRef.current);
@@ -134,13 +132,12 @@ export const App: React.FC = () => {
       window.speechSynthesis.cancel();
     }
     setAssistantState('idle');
-    addActivity('warn', 'ai', 'User triggered subsystem halt / interrupt.');
+    addActivity('warn', 'ai', 'Manual directive override: Subsystem halted.');
   }, [addActivity]);
 
-  // Speak text using browser SpeechSynthesis if enabled
   const speakText = useCallback((text: string, onEnd: () => void) => {
     if (!telemetry.speakerEnabled || !settings.speechEnabled || !('speechSynthesis' in window)) {
-      speechTimeoutRef.current = window.setTimeout(onEnd, 1500);
+      speechTimeoutRef.current = window.setTimeout(onEnd, 1400);
       return;
     }
 
@@ -150,12 +147,8 @@ export const App: React.FC = () => {
       utterance.rate = 1.05;
       utterance.pitch = 0.95;
 
-      utterance.onend = () => {
-        onEnd();
-      };
-      utterance.onerror = () => {
-        onEnd();
-      };
+      utterance.onend = () => onEnd();
+      utterance.onerror = () => onEnd();
 
       window.speechSynthesis.speak(utterance);
     } catch {
@@ -163,7 +156,6 @@ export const App: React.FC = () => {
     }
   }, [telemetry.speakerEnabled, settings.speechEnabled]);
 
-  // Handle sending a chat message
   const handleSendMessage = (text: string) => {
     const now = new Date().toLocaleTimeString('en-US', { hour12: false });
     const userMsg: ChatMessage = {
@@ -176,23 +168,25 @@ export const App: React.FC = () => {
 
     setMessages((prev) => [...prev, userMsg]);
     setAssistantState('thinking');
-    addActivity('info', 'ai', `User input received: "${text.length > 30 ? text.substring(0, 30) + '...' : text}"`);
+    addActivity('info', 'ai', `Direct input received: "${text.length > 25 ? text.substring(0, 25) + '...' : text}"`);
 
-    // Simulate AI reasoning and generate contextual mock response
     const startTime = performance.now();
     setTimeout(() => {
       const elapsed = Math.round(performance.now() - startTime);
-      let responseText = `I have received your command: "${text}". All desktop interfaces are operating under Stage 1 protocol.`;
+      let responseText = `Directive registered: "${text}". All Mark-85 HUD channels operating smoothly.`;
 
       const lower = text.toLowerCase();
-      if (lower.includes('diagnostic') || lower.includes('status')) {
-        responseText = `System diagnostic report: Host platform is Windows 11 x64, Electron sandbox active, CPU load ${telemetry.cpuUsage}%, renderer memory footprint ~${telemetry.memoryUsageMb}MB. No anomalies detected.`;
-      } else if (lower.includes('memory')) {
-        responseText = `You currently have ${memories.length} durable memory records in your local store. Stage 4 will connect SQLite and Drizzle ORM for automated memory indexing.`;
-      } else if (lower.includes('voice') || lower.includes('speak')) {
-        responseText = 'Voice synthesis subsystem verified. Audio pipeline is responsive with harmonic frequency modulation.';
-      } else if (lower.includes('who are you') || lower.includes('jarvis')) {
-        responseText = 'I am JARVIS, an autonomous personal AI desktop agent designed for Windows 11. Currently operating in Stage 1 HUD mode.';
+      if (lower.includes('diagnostic') || lower.includes('telemetry')) {
+        responseText = `Tactical Diagnostics: Host architecture is Windows 11 x64, Three.js orbital physics operating smoothly, CPU load at ${telemetry.cpuUsage}%, memory footprint ~${telemetry.memoryUsageMb}MB. All defensive protocols nominal.`;
+      } else if (lower.includes('memory') || lower.includes('bank')) {
+        responseText = `Accessing memory banks: ${memories.length} durable records indexed in local store. All sectors encrypted.`;
+      } else if (lower.includes('audio') || lower.includes('harmonic')) {
+        responseText = 'Acoustic visualizer synchronized. Harmonic carrier frequencies transmitting at 1420.4 MHz.';
+      } else if (lower.includes('alert') || lower.includes('defcon')) {
+        responseText = 'Defcon alert simulated. Quantum core shifting to amber alert matrix.';
+        setAssistantState('error');
+        addActivity('warn', 'security', 'Simulated Defcon-1 alert protocol activated.');
+        return;
       }
 
       const jarvisMsg: ChatMessage = {
@@ -201,44 +195,42 @@ export const App: React.FC = () => {
         text: responseText,
         timestamp: new Date().toLocaleTimeString('en-US', { hour12: false }),
         metadata: {
-          modelUsed: settings.openRouterModel.split('/')[1] || 'Stage 1 Mock',
+          modelUsed: 'JARVIS Core',
           durationMs: elapsed,
         },
       };
 
       setMessages((prev) => [...prev, jarvisMsg]);
       setAssistantState('speaking');
-      addActivity('success', 'ai', `Response generated (${elapsed}ms). Synthesizing speech.`);
+      addActivity('success', 'ai', `Synthesizing vocal response (${elapsed}ms).`);
 
       speakText(responseText, () => {
         setAssistantState('idle');
-        addActivity('info', 'system', 'Voice playback concluded. Ready for next prompt.');
+        addActivity('info', 'system', 'Voice playback complete. Core standing by.');
       });
     }, 1100);
   };
 
-  // Trigger voice capture (mock or speech recognition)
   const handleVoiceInputTrigger = () => {
     if (assistantState === 'listening') {
       setAssistantState('idle');
-      addActivity('info', 'voice', 'Microphone capture stopped.');
+      addActivity('info', 'voice', 'Microphone capture closed.');
       return;
     }
 
     setAssistantState('listening');
-    addActivity('info', 'voice', 'Microphone capture opened. Listening for speech...');
+    addActivity('info', 'voice', 'Audio transcriber engaged. Listening for vocal directive...');
 
-    // Simulate transcribed voice dictation after listening pause
     setTimeout(() => {
       setAssistantState('idle');
-      handleSendMessage('Simulate voice audio response');
-    }, 2400);
+      handleSendMessage('Run complete desktop telemetry diagnostics');
+    }, 2500);
   };
 
   const handleToggleMic = () => {
     setTelemetry((prev) => {
       const next = !prev.micEnabled;
-      addActivity('info', 'voice', `Microphone ${next ? 'enabled' : 'muted'}.`);
+      addActivity('info', 'voice', `Microphone ${next ? 'engaged' : 'muted'}.`);
       return { ...prev, micEnabled: next };
     });
   };
@@ -249,7 +241,7 @@ export const App: React.FC = () => {
       if (!next && 'speechSynthesis' in window) {
         window.speechSynthesis.cancel();
       }
-      addActivity('info', 'voice', `Speech output ${next ? 'enabled' : 'muted'}.`);
+      addActivity('info', 'voice', `Acoustic playback ${next ? 'engaged' : 'muted'}.`);
       return { ...prev, speakerEnabled: next };
     });
   };
@@ -263,7 +255,7 @@ export const App: React.FC = () => {
           ? newSettings.openRouterModel
           : newSettings.ollamaModel,
     }));
-    addActivity('success', 'system', 'Updated system preferences and AI model target.');
+    addActivity('success', 'system', 'Updated tactical parameters.');
   };
 
   const handleAddMemory = (content: string, category: UserMemoryItem['category']) => {
@@ -274,23 +266,25 @@ export const App: React.FC = () => {
       createdAt: new Date().toLocaleString(),
     };
     setMemories((prev) => [item, ...prev]);
-    addActivity('info', 'system', `Added memory: "${content.substring(0, 25)}..."`);
+    addActivity('info', 'system', `Memory banked: "${content.substring(0, 20)}..."`);
   };
 
   const handleDeleteMemory = (id: string) => {
     setMemories((prev) => prev.filter((m) => m.id !== id));
-    addActivity('info', 'system', `Deleted memory record ID ${id}`);
+    addActivity('info', 'system', `Purged memory ID ${id}`);
   };
 
   const handleUpdateMemory = (id: string, newContent: string) => {
     setMemories((prev) =>
       prev.map((m) => (m.id === id ? { ...m, content: newContent } : m))
     );
-    addActivity('info', 'system', `Updated memory record ID ${id}`);
+    addActivity('info', 'system', `Updated memory ID ${id}`);
   };
 
   return (
     <div className="hud-container">
+      <div className="scanline-overlay" />
+
       <Header
         telemetry={telemetry}
         assistantState={assistantState}
@@ -305,7 +299,7 @@ export const App: React.FC = () => {
           state={assistantState}
           onStateChange={(st) => {
             setAssistantState(st);
-            addActivity('info', 'system', `Manual state override: ${st.toUpperCase()}`);
+            addActivity('info', 'system', `Manual core state: ${st.toUpperCase()}`);
           }}
           onInterrupt={handleHalt}
         />
@@ -317,7 +311,7 @@ export const App: React.FC = () => {
           onVoiceInputTrigger={handleVoiceInputTrigger}
           onClearMessages={() => {
             setMessages([]);
-            addActivity('info', 'system', 'Chat terminal buffer cleared.');
+            addActivity('info', 'system', 'Comms buffer purged.');
           }}
         />
       </main>

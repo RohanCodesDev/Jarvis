@@ -49,7 +49,7 @@ const createWindow = () => {
     backgroundColor: '#060a12',
     title: 'JARVIS Desktop HUD',
     autoHideMenuBar: true,
-    show: false,
+    show: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
@@ -58,10 +58,8 @@ const createWindow = () => {
     },
   });
 
-  // Gracefully show when ready to avoid white flash
-  mainWindow.once('ready-to-show', () => {
-    mainWindow?.show();
-  });
+  mainWindow.show();
+  mainWindow.focus();
 
   if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
     mainWindow.loadURL(MAIN_WINDOW_VITE_DEV_SERVER_URL);

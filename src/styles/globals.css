@@ -1,39 +1,40 @@
 :root {
-  --bg-primary: #050811;
-  --bg-surface: #0a1020;
-  --bg-surface-elevated: #0f182f;
-  --bg-surface-translucent: rgba(10, 16, 32, 0.85);
-  
-  --border-subtle: rgba(0, 229, 255, 0.12);
-  --border-bright: rgba(0, 229, 255, 0.35);
-  --border-glow: rgba(0, 229, 255, 0.6);
-  
-  --cyan-primary: #00e5ff;
-  --cyan-glow: rgba(0, 229, 255, 0.25);
-  --cyan-dim: #0099aa;
-  
-  --blue-accent: #0070f3;
-  --blue-glow: rgba(0, 112, 243, 0.3);
-  
-  --state-idle: #00e5ff;
+  --bg-deep: #03060d;
+  --bg-panel: rgba(6, 12, 24, 0.78);
+  --bg-panel-glow: rgba(0, 229, 255, 0.03);
+  --bg-input: rgba(4, 9, 18, 0.9);
+
+  --hud-cyan: #00f0ff;
+  --hud-cyan-dim: #008899;
+  --hud-cyan-glow: rgba(0, 240, 255, 0.45);
+  --hud-cyan-soft: rgba(0, 240, 255, 0.12);
+  --hud-cyan-border: rgba(0, 240, 255, 0.22);
+  --hud-cyan-bright: rgba(0, 240, 255, 0.65);
+
+  --hud-blue: #0077ff;
+  --hud-emerald: #00ffaa;
+  --hud-amber: #ffaa00;
+  --hud-crimson: #ff2255;
+  --hud-aurora: #a855f7;
+
+  --state-idle: #00f0ff;
   --state-listening: #00ffaa;
-  --state-thinking: #ffaa00;
+  --state-thinking: #00f0ff;
   --state-speaking: #38bdf8;
-  --state-error: #ff3366;
-  
-  --text-primary: #f0f6fc;
-  --text-secondary: #8b9bb4;
-  --text-muted: #4a5a74;
-  --text-cyan: #67e8f9;
-  
+  --state-error: #ff2255;
+
+  --text-main: #f0f6fc;
+  --text-secondary: #7e93b0;
+  --text-dim: #445671;
+  --text-cyan: #38e8ff;
+
   --font-hud: 'Chakra Petch', sans-serif;
-  --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
   --font-mono: 'JetBrains Mono', monospace;
-  
-  --radius-sm: 4px;
-  --radius-md: 8px;
-  --radius-lg: 14px;
-  --radius-full: 9999px;
+  --font-body: 'Plus Jakarta Sans', sans-serif;
+
+  --clip-corner-sm: polygon(0 6px, 6px 0, calc(100% - 6px) 0, 100% 6px, 100% calc(100% - 6px), calc(100% - 6px) 100%, 6px 100%, 0 calc(100% - 6px));
+  --clip-corner-md: polygon(0 12px, 12px 0, calc(100% - 12px) 0, 100% 12px, 100% calc(100% - 12px), calc(100% - 12px) 100%, 12px 100%, 0 calc(100% - 12px));
+  --clip-corner-tag: polygon(0 4px, 4px 0, calc(100% - 4px) 0, 100% 4px, 100% calc(100% - 4px), calc(100% - 4px) 100%, 4px 100%, 0 calc(100% - 4px));
 }
 
 * {
@@ -44,71 +45,89 @@
 }
 
 body {
-  font-family: var(--font-sans);
-  background-color: var(--bg-primary);
-  color: var(--text-primary);
+  font-family: var(--font-body);
+  background-color: var(--bg-deep);
+  color: var(--text-main);
   overflow: hidden;
   height: 100vh;
   width: 100vw;
   -webkit-font-smoothing: antialiased;
   background-image: 
-    radial-gradient(circle at 50% 0%, rgba(0, 229, 255, 0.06) 0%, transparent 50%),
-    radial-gradient(circle at 85% 100%, rgba(0, 112, 243, 0.05) 0%, transparent 40%),
-    linear-gradient(rgba(0, 229, 255, 0.02) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(0, 229, 255, 0.02) 1px, transparent 1px);
-  background-size: 100% 100%, 100% 100%, 32px 32px, 32px 32px;
+    radial-gradient(circle at 50% 40%, rgba(0, 240, 255, 0.08) 0%, transparent 60%),
+    radial-gradient(circle at 85% 85%, rgba(0, 119, 255, 0.06) 0%, transparent 45%),
+    radial-gradient(circle at 15% 15%, rgba(0, 255, 170, 0.04) 0%, transparent 40%),
+    linear-gradient(rgba(0, 240, 255, 0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 240, 255, 0.02) 1px, transparent 1px);
+  background-size: 100% 100%, 100% 100%, 100% 100%, 36px 36px, 36px 36px;
 }
 
-/* Custom scrollbars */
+/* Subtle holographic scanline layer */
+.scanline-overlay {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(rgba(0, 0, 0, 0) 50%, rgba(0, 240, 255, 0.012) 50%);
+  background-size: 100% 4px;
+  z-index: 999;
+}
+
+/* Custom technical scrollbar */
 ::-webkit-scrollbar {
-  width: 5px;
-  height: 5px;
+  width: 4px;
+  height: 4px;
 }
 
 ::-webkit-scrollbar-track {
-  background: rgba(5, 8, 17, 0.6);
+  background: rgba(3, 7, 15, 0.8);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(0, 229, 255, 0.2);
-  border-radius: var(--radius-full);
+  background: var(--hud-cyan-dim);
+  border-radius: 2px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 229, 255, 0.4);
+  background: var(--hud-cyan);
 }
 
-/* Glass panel utility */
+/* Futuristic HUD Panel with corner clips & tactical brackets */
 .hud-panel {
-  background: var(--bg-surface-translucent);
-  backdrop-filter: blur(12px);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
+  background: var(--bg-panel);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--hud-cyan-border);
+  clip-path: var(--clip-corner-md);
   position: relative;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6), inset 0 0 20px rgba(0, 240, 255, 0.02);
+  transition: border-color 0.3s ease, box-shadow 0.3s ease;
 }
 
+.hud-panel:hover {
+  border-color: rgba(0, 240, 255, 0.35);
+}
+
+/* Corner micro brackets */
 .hud-panel::before {
   content: '';
   position: absolute;
-  top: 0;
-  left: 0;
-  width: 8px;
-  height: 8px;
-  border-top: 1px solid var(--cyan-primary);
-  border-left: 1px solid var(--cyan-primary);
+  top: 2px;
+  left: 2px;
+  width: 10px;
+  height: 10px;
+  border-top: 2px solid var(--hud-cyan);
+  border-left: 2px solid var(--hud-cyan);
   pointer-events: none;
 }
 
 .hud-panel::after {
   content: '';
   position: absolute;
-  bottom: 0;
-  right: 0;
-  width: 8px;
-  height: 8px;
-  border-bottom: 1px solid var(--cyan-primary);
-  border-right: 1px solid var(--cyan-primary);
+  bottom: 2px;
+  right: 2px;
+  width: 10px;
+  height: 10px;
+  border-bottom: 2px solid var(--hud-cyan);
+  border-right: 2px solid var(--hud-cyan);
   pointer-events: none;
 }
 
@@ -120,23 +139,25 @@ body {
   gap: 8px;
   padding: 8px 14px;
   font-family: var(--font-hud);
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--cyan-primary);
-  background: rgba(0, 229, 255, 0.06);
-  border: 1px solid var(--border-bright);
-  border-radius: var(--radius-sm);
+  color: var(--hud-cyan);
+  background: rgba(0, 240, 255, 0.05);
+  border: 1px solid var(--hud-cyan-border);
+  clip-path: var(--clip-corner-sm);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
   outline: none;
+  position: relative;
 }
 
 .hud-btn:hover {
-  background: rgba(0, 229, 255, 0.15);
-  border-color: var(--cyan-primary);
-  box-shadow: 0 0 14px var(--cyan-glow);
+  background: rgba(0, 240, 255, 0.16);
+  border-color: var(--hud-cyan);
+  color: #ffffff;
+  box-shadow: 0 0 16px var(--hud-cyan-glow), inset 0 0 8px rgba(0, 240, 255, 0.2);
   transform: translateY(-1px);
 }
 
@@ -145,30 +166,34 @@ body {
 }
 
 .hud-btn-primary {
-  background: linear-gradient(135deg, rgba(0, 229, 255, 0.25), rgba(0, 112, 243, 0.3));
-  border-color: var(--cyan-primary);
+  background: linear-gradient(135deg, rgba(0, 240, 255, 0.22), rgba(0, 119, 255, 0.28));
+  border-color: var(--hud-cyan);
   color: #ffffff;
-  box-shadow: 0 0 12px rgba(0, 229, 255, 0.2);
+  box-shadow: 0 0 14px rgba(0, 240, 255, 0.25);
 }
 
 .hud-btn-primary:hover {
-  background: linear-gradient(135deg, rgba(0, 229, 255, 0.4), rgba(0, 112, 243, 0.45));
-  box-shadow: 0 0 20px rgba(0, 229, 255, 0.4);
+  background: linear-gradient(135deg, rgba(0, 240, 255, 0.38), rgba(0, 119, 255, 0.45));
+  box-shadow: 0 0 24px var(--hud-cyan-glow);
 }
 
 .hud-btn-icon {
-  width: 36px;
-  height: 36px;
+  width: 34px;
+  height: 34px;
   padding: 0;
-  border-radius: var(--radius-sm);
+  clip-path: var(--clip-corner-sm);
 }
 
 .hud-tag {
   font-family: var(--font-mono);
-  font-size: 11px;
-  padding: 2px 7px;
-  border-radius: 3px;
-  background: rgba(0, 229, 255, 0.08);
-  border: 1px solid var(--border-subtle);
-  color: var(--cyan-dim);
+  font-size: 10.5px;
+  letter-spacing: 0.05em;
+  padding: 3px 8px;
+  background: rgba(0, 240, 255, 0.08);
+  border: 1px solid var(--hud-cyan-border);
+  clip-path: var(--clip-corner-tag);
+  color: var(--hud-cyan);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
 }

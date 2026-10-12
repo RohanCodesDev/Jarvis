@@ -1,5 +1,5 @@
 import React from 'react';
-import { Terminal, Trash2 } from 'lucide-react';
+import { Terminal, Trash2, Lock } from 'lucide-react';
 import type { ChatMessage, AssistantState } from '../../types/hud';
 import { MessageList } from './MessageList';
 import { MessageComposer } from './MessageComposer';
@@ -20,33 +20,37 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
   onClearMessages,
 }) => {
   return (
-    <div className="hud-panel hud-chat-column">
-      <div className="chat-panel-container">
-        <div className="chat-panel-header">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Terminal size={16} color="var(--cyan-primary)" />
-            <span>COMMAND TERMINAL & DIALOGUE</span>
-            <span className="hud-tag">{messages.length} MSGS</span>
-          </div>
-
-          <button
-            className="hud-btn hud-btn-icon"
-            style={{ width: '28px', height: '28px' }}
-            title="Clear Chat History"
-            onClick={onClearMessages}
-          >
-            <Trash2 size={13} color="var(--text-muted)" />
-          </button>
+    <div className="hud-panel hud-chat-terminal">
+      <div className="terminal-header">
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <Terminal size={15} color="var(--hud-cyan)" />
+          <span>COMMS UPLINK // TACTICAL DIALOGUE</span>
+          <span className="hud-tag" style={{ color: '#86efac' }}>
+            <Lock size={10} style={{ display: 'inline', marginRight: '3px' }} />
+            AES-256
+          </span>
         </div>
 
-        <MessageList messages={messages} />
-
-        <MessageComposer
-          onSendMessage={onSendMessage}
-          onVoiceInputTrigger={onVoiceInputTrigger}
-          disabled={assistantState === 'thinking'}
-        />
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span className="hud-tag">{messages.length} LOGS</span>
+          <button
+            className="hud-btn hud-btn-icon"
+            style={{ width: '26px', height: '26px' }}
+            title="Purge Comms Buffer"
+            onClick={onClearMessages}
+          >
+            <Trash2 size={12} color="var(--text-dim)" />
+          </button>
+        </div>
       </div>
+
+      <MessageList messages={messages} />
+
+      <MessageComposer
+        onSendMessage={onSendMessage}
+        onVoiceInputTrigger={onVoiceInputTrigger}
+        disabled={assistantState === 'thinking'}
+      />
     </div>
   );
 };

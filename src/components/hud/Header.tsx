@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Cpu, ShieldCheck, Settings, Database, Mic, MicOff, Volume2, VolumeX, Radio } from 'lucide-react';
+import { Cpu, ShieldCheck, Settings, Database, Mic, MicOff, Volume2, VolumeX, Radio, Globe } from 'lucide-react';
 import type { SystemTelemetry, AssistantState } from '../../types/hud';
 
 interface HeaderProps {
@@ -34,69 +34,81 @@ export const Header: React.FC<HeaderProps> = ({
   return (
     <header className="hud-panel hud-header">
       <div className="hud-brand">
-        <Radio className="hud-logo-icon" />
-        <div className="hud-title">
-          <span>JARVIS</span>
-          <span className="hud-version-badge">OS // V1.0 HUD</span>
+        <div className="hud-brand-symbol">
+          <Radio size={18} />
+        </div>
+        <div className="hud-title-wrap">
+          <div className="hud-title">
+            <span>JARVIS</span>
+            <span className="hud-tag">MK-85 // HUD</span>
+          </div>
+          <span className="hud-sub-title">STARK INDUSTRIES TACTICAL AVIONICS</span>
         </div>
       </div>
 
-      <div className="hud-telemetry-bar">
-        <div className="telemetry-item">
-          <span className={`status-dot ${assistantState}`} />
-          <span>STATUS: <strong>{assistantState.toUpperCase()}</strong></span>
+      <div className="hud-telemetry-cluster">
+        <div className="hud-telemetry-node">
+          <span className={`hud-status-orb ${assistantState}`} />
+          <span>SYS.STATE: <strong>{assistantState.toUpperCase()}</strong></span>
         </div>
 
-        <div className="telemetry-item">
-          <Cpu size={14} color="var(--cyan-primary)" />
-          <span>SYS CORE: <strong>{telemetry.cpuUsage}%</strong></span>
+        <div className="hud-telemetry-node">
+          <Cpu size={13} color="var(--hud-cyan)" />
+          <span>LOAD: <strong>{telemetry.cpuUsage}%</strong></span>
         </div>
 
-        <div className="telemetry-item">
-          <ShieldCheck size={14} color="#86efac" />
-          <span>MODEL: <strong>{telemetry.activeModel}</strong></span>
+        <div className="hud-telemetry-node">
+          <ShieldCheck size={13} color="#86efac" />
+          <span>MODEL: <strong>{telemetry.activeModel.split(' ')[0]}</strong></span>
         </div>
 
-        <div className="telemetry-item">
-          <span className="hud-tag">{timeStr || '00:00:00'}</span>
+        <div className="hud-telemetry-node">
+          <Globe size={13} color="var(--hud-cyan)" />
+          <span>LINK: <strong>STABLE</strong></span>
+        </div>
+
+        <div className="hud-telemetry-node">
+          <span className="hud-tag" style={{ color: 'var(--hud-cyan)' }}>
+            {timeStr || '12:00:00'}
+          </span>
         </div>
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
         <button
           className="hud-btn hud-btn-icon"
-          title={telemetry.micEnabled ? 'Mute Microphone' : 'Enable Microphone'}
+          title={telemetry.micEnabled ? 'Mute Microphone' : 'Engage Microphone'}
           onClick={onToggleMic}
-          style={{ borderColor: telemetry.micEnabled ? 'var(--cyan-primary)' : 'var(--border-subtle)' }}
+          style={{ borderColor: telemetry.micEnabled ? 'var(--hud-cyan)' : 'var(--hud-cyan-border)' }}
         >
-          {telemetry.micEnabled ? <Mic size={16} /> : <MicOff size={16} color="var(--text-muted)" />}
+          {telemetry.micEnabled ? <Mic size={15} /> : <MicOff size={15} color="var(--text-dim)" />}
         </button>
 
         <button
           className="hud-btn hud-btn-icon"
-          title={telemetry.speakerEnabled ? 'Mute Speech Output' : 'Enable Speech Output'}
+          title={telemetry.speakerEnabled ? 'Mute Speech Output' : 'Engage Speech Output'}
           onClick={onToggleSpeaker}
-          style={{ borderColor: telemetry.speakerEnabled ? 'var(--cyan-primary)' : 'var(--border-subtle)' }}
+          style={{ borderColor: telemetry.speakerEnabled ? 'var(--hud-cyan)' : 'var(--hud-cyan-border)' }}
         >
-          {telemetry.speakerEnabled ? <Volume2 size={16} /> : <VolumeX size={16} color="var(--text-muted)" />}
+          {telemetry.speakerEnabled ? <Volume2 size={15} /> : <VolumeX size={15} color="var(--text-dim)" />}
         </button>
 
         <button
           className="hud-btn"
           onClick={onOpenMemory}
-          title="Inspect Long-Term Memory"
+          title="Inspect Persistent Memory Bank"
         >
-          <Database size={15} />
+          <Database size={14} />
           <span>Memory</span>
         </button>
 
         <button
           className="hud-btn"
           onClick={onOpenSettings}
-          title="Configure System & AI Provider"
+          title="System & AI Parameters"
         >
-          <Settings size={15} />
-          <span>Settings</span>
+          <Settings size={14} />
+          <span>Config</span>
         </button>
       </div>
     </header>

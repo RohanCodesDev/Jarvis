@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Send, Mic, Sparkles } from 'lucide-react';
+import { Send, Mic, Terminal } from 'lucide-react';
 
 interface MessageComposerProps {
   onSendMessage: (text: string) => void;
@@ -27,48 +27,53 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
     }
   };
 
-  const handleQuickPrompt = (prompt: string) => {
-    setInputText(prompt);
-  };
+  const protocols = [
+    { label: '[PROTO: DIAGNOSTICS]', prompt: 'Run complete desktop telemetry diagnostics' },
+    { label: '[PROTO: MEMORY_BANK]', prompt: 'Query durable memory banks' },
+    { label: '[PROTO: AUDIO_TEST]', prompt: 'Initiate acoustic synthesis harmonic test' },
+    { label: '[PROTO: DEFCON_ALERT]', prompt: 'Simulate critical subsystem alert' },
+  ];
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-      <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '2px' }}>
-        {[
-          'Run desktop system diagnostics',
-          'What are my active memory items?',
-          'Simulate voice audio response',
-        ].map((p, idx) => (
+    <div className="terminal-composer-area">
+      <div className="protocol-chip-scroll">
+        {protocols.map((p, idx) => (
           <button
             key={idx}
-            className="hud-tag"
-            style={{ cursor: 'pointer', background: 'rgba(0, 229, 255, 0.05)', whiteSpace: 'nowrap' }}
-            onClick={() => handleQuickPrompt(p)}
+            className="protocol-chip"
+            onClick={() => setInputText(p.prompt)}
           >
-            <Sparkles size={10} style={{ display: 'inline', marginRight: '4px' }} />
-            {p}
+            {p.label}
           </button>
         ))}
       </div>
 
-      <div className="chat-composer">
-        <input
-          type="text"
-          className="chat-input"
-          placeholder="Command or query JARVIS... (Press Enter to send)"
-          value={inputText}
-          onChange={(e) => setInputText(e.target.value)}
-          onKeyDown={handleKeyDown}
-          disabled={disabled}
-        />
+      <div className="composer-input-row">
+        <div style={{ position: 'relative', flex: 1, display: 'flex', alignItems: 'center' }}>
+          <Terminal
+            size={13}
+            color="var(--hud-cyan)"
+            style={{ position: 'absolute', left: '12px', pointerEvents: 'none', opacity: 0.7 }}
+          />
+          <input
+            type="text"
+            className="terminal-text-input"
+            style={{ paddingLeft: '32px' }}
+            placeholder="Enter directive or voice query... (Return to transmit)"
+            value={inputText}
+            onChange={(e) => setInputText(e.target.value)}
+            onKeyDown={handleKeyDown}
+            disabled={disabled}
+          />
+        </div>
 
         <button
           className="hud-btn hud-btn-icon"
-          title="Dictate with voice"
+          title="Engage Voice Dictation"
           onClick={onVoiceInputTrigger}
           type="button"
         >
-          <Mic size={16} />
+          <Mic size={15} />
         </button>
 
         <button
@@ -76,10 +81,10 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
           onClick={handleSend}
           disabled={!inputText.trim() || disabled}
           type="button"
-          style={{ opacity: !inputText.trim() || disabled ? 0.5 : 1 }}
+          style={{ opacity: !inputText.trim() || disabled ? 0.45 : 1 }}
         >
-          <Send size={15} />
-          <span>Send</span>
+          <Send size={13} />
+          <span>Transmit</span>
         </button>
       </div>
     </div>
