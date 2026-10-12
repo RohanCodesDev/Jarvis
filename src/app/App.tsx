@@ -10,6 +10,7 @@ import type {
 } from '../types/hud';
 import { Header } from '../components/hud/Header';
 import { AssistantOrb } from '../components/hud/AssistantOrb';
+import { StateToggles } from '../components/hud/StateToggles';
 import { SettingsModal } from '../components/settings/SettingsModal';
 import { MemoryViewer } from '../components/settings/MemoryViewer';
 
@@ -135,6 +136,19 @@ export const App: React.FC = () => {
     setAssistantState('idle');
     addActivity('warn', 'ai', 'Manual directive override: Subsystem halted.');
   }, [addActivity]);
+
+  const handleManualStateChange = useCallback((nextState: AssistantState) => {
+    if (nextState === 'idle') {
+      handleHalt();
+    } else {
+      if (speechTimeoutRef.current) {
+        clearTimeout(speechTimeoutRef.current);
+        speechTimeoutRef.current = null;
+      }
+      setAssistantState(nextState);
+      addActivity('info', 'system', `Orb state changed: ${nextState.toUpperCase()}`);
+    }
+  }, [handleHalt, addActivity]);
 
   const speakText = useCallback((text: string, onEnd: () => void) => {
     if (!telemetry.speakerEnabled || !settings.speechEnabled || !('speechSynthesis' in window)) {
@@ -364,7 +378,13 @@ export const App: React.FC = () => {
         </div>
       </main>
 
-      {/* 5. Slide-Out Comms Drawer */}
+      {/* 3. Extreme-Right Minimal State Management Toggles */}
+      <StateToggles
+        currentState={assistantState}
+        onStateChange={handleManualStateChange}
+      />
+
+      {/* 4. Slide-Out Comms Drawer */}
       {drawerOpen && (
         <div className="comms-drawer-backdrop" onClick={() => setDrawerOpen(false)}>
           <div className="comms-drawer" onClick={(e) => e.stopPropagation()}>
