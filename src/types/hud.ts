@@ -1,4 +1,9 @@
-export type AssistantState = 'idle' | 'listening' | 'thinking' | 'speaking' | 'error';
+export type AssistantState =
+  | 'idle'
+  | 'listening'
+  | 'thinking'
+  | 'speaking'
+  | 'error';
 
 export interface ChatMessage {
   id: string;
@@ -58,7 +63,13 @@ export interface DesktopBridgeAPI {
     nodeVersion: string;
   }>;
   logActivity: (item: Omit<ActivityItem, 'id' | 'timestamp'>) => Promise<void>;
-  saveSetting?: (key: string, value: unknown) => Promise<boolean>;
+  hasApiKey: () => Promise<boolean>;
+  setApiKey: (key: string) => Promise<{ success: boolean; error?: string }>;
+  deleteApiKey: () => Promise<{ success: boolean }>;
+  getSettings: () => Promise<JarvisSettings>;
+  saveSettings: (
+    settings: Partial<JarvisSettings>,
+  ) => Promise<{ success: boolean }>;
 }
 
 declare global {

@@ -73,9 +73,14 @@ export const AssistantOrb: React.FC<AssistantOrbProps> = ({
   const globe = getGlobeParameters();
 
   return (
-    <div className="hero-orb-viewport" onClick={state !== 'idle' ? onInterrupt : undefined}>
+    <div
+      className="hero-orb-viewport"
+      onClick={state !== 'idle' ? onInterrupt : undefined}
+    >
       {/* Ethereal Thinking Radial Aura directly at the back of the orb */}
-      <div className={`orb-thinking-glow ${state === 'thinking' ? 'active' : ''}`} />
+      <div
+        className={`orb-thinking-glow ${state === 'thinking' ? 'active' : ''}`}
+      />
 
       <div className="orb-canvas-container">
         <GlobeParticleSphere

@@ -15,6 +15,14 @@ function isValidSender(event: IpcMainInvokeEvent): boolean {
   return event.sender.id === mainWindow.webContents.id;
 }
 
+import {
+  storeApiKey,
+  hasApiKey,
+  deleteApiKey,
+  isSecretStorageAvailable,
+} from './services/secretStore';
+import { loadSettings, saveSettings } from './services/settingsStore';
+
 function setupIpcHandlers() {
   ipcMain.handle('desktop:getSystemInfo', async (event) => {
     if (!isValidSender(event)) {
@@ -34,9 +42,60 @@ function setupIpcHandlers() {
     }
     if (typeof payload === 'object' && payload !== null) {
       const data = payload as Record<string, unknown>;
-      console.log(`[HUD Activity] [${data.category || 'system'}] ${data.message || ''}`);
+      console.log(
+        `[HUD Activity] [${data.category || 'system'}] ${data.message || ''}`,
+      );
     }
     return { success: true };
+  });
+
+  ipcMain.handle('desktop:hasApiKey', async (event) => {
+    if (!isValidSender(event)) {
+      throw new Error('Unauthorized IPC sender');
+    }
+    return hasApiKey();
+  });
+
+  ipcMain.handle('desktop:setApiKey', async (event, key: unknown) => {
+    if (!isValidSender(event)) {
+      throw new Error('Unauthorized IPC sender');
+    }
+    if (typeof key !== 'string' || !key.trim()) {
+      return { success: false, error: 'Invalid API key provided' };
+    }
+    if (!isSecretStorageAvailable()) {
+      return { success: false, error: 'OS secure storage unavailable on host' };
+    }
+    const success = storeApiKey(key);
+    return { success, error: success ? undefined : 'Failed to encrypt secret' };
+  });
+
+  ipcMain.handle('desktop:deleteApiKey', async (event) => {
+    if (!isValidSender(event)) {
+      throw new Error('Unauthorized IPC sender');
+    }
+    const success = deleteApiKey();
+    return { success };
+  });
+
+  ipcMain.handle('desktop:getSettings', async (event) => {
+    if (!isValidSender(event)) {
+      throw new Error('Unauthorized IPC sender');
+    }
+    const settings = loadSettings();
+    settings.hasApiKey = hasApiKey();
+    return settings;
+  });
+
+  ipcMain.handle('desktop:saveSettings', async (event, payload: unknown) => {
+    if (!isValidSender(event)) {
+      throw new Error('Unauthorized IPC sender');
+    }
+    if (typeof payload !== 'object' || payload === null) {
+      return { success: false };
+    }
+    const success = saveSettings(payload as Record<string, unknown>);
+    return { success };
   });
 }
 

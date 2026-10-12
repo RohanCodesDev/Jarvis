@@ -83,15 +83,37 @@
   animation: pulse-hud 2.2s infinite ease-in-out;
 }
 
-.hud-status-orb.idle { background: var(--state-idle); box-shadow: 0 0 8px var(--state-idle); }
-.hud-status-orb.listening { background: var(--state-listening); box-shadow: 0 0 12px var(--state-listening); }
-.hud-status-orb.thinking { background: var(--state-thinking); box-shadow: 0 0 12px var(--state-thinking); }
-.hud-status-orb.speaking { background: var(--state-speaking); box-shadow: 0 0 12px var(--state-speaking); }
-.hud-status-orb.error { background: var(--state-error); box-shadow: 0 0 12px var(--state-error); }
+.hud-status-orb.idle {
+  background: var(--state-idle);
+  box-shadow: 0 0 8px var(--state-idle);
+}
+.hud-status-orb.listening {
+  background: var(--state-listening);
+  box-shadow: 0 0 12px var(--state-listening);
+}
+.hud-status-orb.thinking {
+  background: var(--state-thinking);
+  box-shadow: 0 0 12px var(--state-thinking);
+}
+.hud-status-orb.speaking {
+  background: var(--state-speaking);
+  box-shadow: 0 0 12px var(--state-speaking);
+}
+.hud-status-orb.error {
+  background: var(--state-error);
+  box-shadow: 0 0 12px var(--state-error);
+}
 
 @keyframes pulse-hud {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.35; transform: scale(0.8); }
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.35;
+    transform: scale(0.8);
+  }
 }
 
 /* 2. Hero Center Stage (Dominant Big Orb) */
@@ -117,10 +139,24 @@
   z-index: 10;
 }
 
-.stage-reticle-label.top-left { top: 12px; left: 18px; }
-.stage-reticle-label.top-right { top: 12px; right: 18px; text-align: right; }
-.stage-reticle-label.bottom-left { bottom: 68px; left: 18px; }
-.stage-reticle-label.bottom-right { bottom: 68px; right: 18px; text-align: right; }
+.stage-reticle-label.top-left {
+  top: 12px;
+  left: 18px;
+}
+.stage-reticle-label.top-right {
+  top: 12px;
+  right: 18px;
+  text-align: right;
+}
+.stage-reticle-label.bottom-left {
+  bottom: 68px;
+  left: 18px;
+}
+.stage-reticle-label.bottom-right {
+  bottom: 68px;
+  right: 18px;
+  text-align: right;
+}
 
 /* Large Holographic Orb Viewport */
 .hero-orb-viewport {
@@ -142,12 +178,20 @@
   max-width: 85vh;
   max-height: 85vh;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(0, 160, 255, 0.4) 0%, rgba(99, 102, 241, 0.24) 42%, rgba(0, 240, 255, 0.08) 62%, transparent 74%);
+  background: radial-gradient(
+    circle,
+    rgba(0, 160, 255, 0.4) 0%,
+    rgba(99, 102, 241, 0.24) 42%,
+    rgba(0, 240, 255, 0.08) 62%,
+    transparent 74%
+  );
   filter: blur(62px);
   pointer-events: none;
   opacity: 0;
   transform: scale(0.85);
-  transition: opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1), transform 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+  transition:
+    opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.8s cubic-bezier(0.16, 1, 0.3, 1);
   z-index: 1;
 }
 
@@ -160,7 +204,7 @@
 @keyframes thinking-aura-pulse {
   0% {
     opacity: 0.72;
-    transform: scale(1.0);
+    transform: scale(1);
     filter: blur(44px);
   }
   100% {
@@ -205,7 +249,12 @@
   width: 510px;
   height: 510px;
   border-radius: 50%;
-  background: conic-gradient(from 0deg, transparent 0deg, rgba(0, 240, 255, 0.05) 55deg, transparent 60deg);
+  background: conic-gradient(
+    from 0deg,
+    transparent 0deg,
+    rgba(0, 240, 255, 0.05) 55deg,
+    transparent 60deg
+  );
   animation: holo-rotate-cw 10s linear infinite;
   pointer-events: none;
 }
@@ -226,13 +275,21 @@
 }
 
 @keyframes holo-rotate-cw {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 @keyframes holo-rotate-ccw {
-  from { transform: rotate(360deg); }
-  to { transform: rotate(0deg); }
+  from {
+    transform: rotate(360deg);
+  }
+  to {
+    transform: rotate(0deg);
+  }
 }
 
 /* 3. Floating Dialogue Toast (appears above/below the orb) */
@@ -247,14 +304,22 @@
   border: 1px solid rgba(0, 240, 255, 0.22);
   border-radius: 12px;
   padding: 12px 18px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7), 0 0 16px rgba(0, 240, 255, 0.08);
+  box-shadow:
+    0 10px 30px rgba(0, 0, 0, 0.7),
+    0 0 16px rgba(0, 240, 255, 0.08);
   z-index: 25;
   animation: toast-drop 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 @keyframes toast-drop {
-  from { opacity: 0; transform: translateY(-10px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .floating-dialogue-header {
@@ -299,8 +364,14 @@
 }
 
 @keyframes wave-frequency-pulse {
-  0% { height: 3px; opacity: 0.3; }
-  100% { height: 22px; opacity: 1; }
+  0% {
+    height: 3px;
+    opacity: 0.3;
+  }
+  100% {
+    height: 22px;
+    opacity: 1;
+  }
 }
 
 /* 5. Minimalist Floating Command Dock (Bottom Center) */
@@ -324,13 +395,17 @@
   border: 1px solid rgba(0, 240, 255, 0.22);
   border-radius: 9999px;
   padding: 8px 18px;
-  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.75), 0 0 16px rgba(0, 240, 255, 0.08);
+  box-shadow:
+    0 12px 36px rgba(0, 0, 0, 0.75),
+    0 0 16px rgba(0, 240, 255, 0.08);
   transition: all 0.25s ease;
 }
 
 .command-input-bar:focus-within {
   border-color: var(--hud-cyan);
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.8), 0 0 24px var(--hud-cyan-glow);
+  box-shadow:
+    0 12px 40px rgba(0, 0, 0, 0.8),
+    0 0 24px var(--hud-cyan-glow);
 }
 
 .command-text-field {
@@ -421,8 +496,12 @@
 }
 
 @keyframes slide-drawer {
-  from { transform: translateX(100%); }
-  to { transform: translateX(0); }
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
 }
 
 .comms-drawer-header {
@@ -523,7 +602,8 @@
   letter-spacing: 0.08em;
 }
 
-.form-input, .form-select {
+.form-input,
+.form-select {
   background: var(--bg-input);
   border: 1px solid var(--hud-cyan-border);
   clip-path: var(--clip-corner-sm);
@@ -534,14 +614,19 @@
   outline: none;
 }
 
-.form-input:focus, .form-select:focus {
+.form-input:focus,
+.form-select:focus {
   border-color: var(--hud-cyan);
   box-shadow: 0 0 10px var(--hud-cyan-glow);
 }
 
 @keyframes fade-hud {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 /* 7. Extreme-Right Minimal State Management Toggles */
@@ -580,7 +665,9 @@
   border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: 16px;
   padding: 6px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), inset 0 0 12px rgba(255, 255, 255, 0.02);
+  box-shadow:
+    0 10px 30px rgba(0, 0, 0, 0.5),
+    inset 0 0 12px rgba(255, 255, 255, 0.02);
 }
 
 .state-toggle-btn {
@@ -626,7 +713,9 @@
 
 .state-toggle-btn.active .state-toggle-indicator {
   background: var(--state-accent);
-  box-shadow: 0 0 8px var(--state-accent), 0 0 16px var(--state-accent);
+  box-shadow:
+    0 0 8px var(--state-accent),
+    0 0 16px var(--state-accent);
   transform: scale(1.3);
 }
 

@@ -1,5 +1,13 @@
 import React from 'react';
-import { Settings, Database, Mic, MicOff, Volume2, VolumeX, MessageSquare } from 'lucide-react';
+import {
+  Settings,
+  Database,
+  Mic,
+  MicOff,
+  Volume2,
+  VolumeX,
+  MessageSquare,
+} from 'lucide-react';
 import type { SystemTelemetry, AssistantState } from '../../types/hud';
 
 interface HeaderProps {
@@ -28,7 +36,10 @@ export const Header: React.FC<HeaderProps> = ({
       {/* Top Left: jarvis Rc-19 */}
       <div className="hud-brand-minimal">
         <span className="brand-text">jarvis Rc-19</span>
-        <span className={`hud-status-orb ${assistantState}`} title={`Status: ${assistantState.toUpperCase()}`} />
+        <span
+          className={`hud-status-orb ${assistantState}`}
+          title={`Status: ${assistantState.toUpperCase()}`}
+        />
       </div>
 
       {/* Top Right: Icons and labels for each icon - pure borderless, no small divs */}
@@ -38,16 +49,28 @@ export const Header: React.FC<HeaderProps> = ({
           title={telemetry.micEnabled ? 'Mute Microphone' : 'Engage Microphone'}
           onClick={onToggleMic}
         >
-          {telemetry.micEnabled ? <Mic size={15} /> : <MicOff size={15} color="var(--text-dim)" />}
+          {telemetry.micEnabled ? (
+            <Mic size={15} />
+          ) : (
+            <MicOff size={15} color="var(--text-dim)" />
+          )}
           <span>{telemetry.micEnabled ? 'Mic' : 'Muted'}</span>
         </button>
 
         <button
           className="hud-header-btn"
-          title={telemetry.speakerEnabled ? 'Mute Speech Output' : 'Engage Speech Output'}
+          title={
+            telemetry.speakerEnabled
+              ? 'Mute Speech Output'
+              : 'Engage Speech Output'
+          }
           onClick={onToggleSpeaker}
         >
-          {telemetry.speakerEnabled ? <Volume2 size={15} /> : <VolumeX size={15} color="var(--text-dim)" />}
+          {telemetry.speakerEnabled ? (
+            <Volume2 size={15} />
+          ) : (
+            <VolumeX size={15} color="var(--text-dim)" />
+          )}
           <span>{telemetry.speakerEnabled ? 'Audio' : 'Muted'}</span>
         </button>
 

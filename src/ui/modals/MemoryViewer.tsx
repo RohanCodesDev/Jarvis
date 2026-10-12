@@ -22,7 +22,8 @@ export const MemoryViewer: React.FC<MemoryViewerProps> = ({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editText, setEditText] = useState('');
   const [newContent, setNewContent] = useState('');
-  const [newCategory, setNewCategory] = useState<UserMemoryItem['category']>('preference');
+  const [newCategory, setNewCategory] =
+    useState<UserMemoryItem['category']>('preference');
 
   if (!isOpen) return null;
 
@@ -47,13 +48,24 @@ export const MemoryViewer: React.FC<MemoryViewerProps> = ({
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="hud-panel modal-dialog" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '680px' }}>
+      <div
+        className="hud-panel modal-dialog"
+        onClick={(e) => e.stopPropagation()}
+        style={{ maxWidth: '680px' }}
+      >
         <div className="modal-header">
-          <div className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div
+            className="modal-title"
+            style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+          >
             <Database size={18} color="var(--cyan-primary)" />
             <span>PERSISTENT USER MEMORY // LOCAL STORE</span>
           </div>
-          <button className="hud-btn hud-btn-icon" onClick={onClose} style={{ width: '28px', height: '28px' }}>
+          <button
+            className="hud-btn hud-btn-icon"
+            onClick={onClose}
+            style={{ width: '28px', height: '28px' }}
+          >
             <X size={14} />
           </button>
         </div>
@@ -63,7 +75,9 @@ export const MemoryViewer: React.FC<MemoryViewerProps> = ({
             className="form-select"
             style={{ width: '130px' }}
             value={newCategory}
-            onChange={(e) => setNewCategory(e.target.value as UserMemoryItem['category'])}
+            onChange={(e) =>
+              setNewCategory(e.target.value as UserMemoryItem['category'])
+            }
           >
             <option value="preference">Preference</option>
             <option value="system">System</option>
@@ -78,15 +92,34 @@ export const MemoryViewer: React.FC<MemoryViewerProps> = ({
             value={newContent}
             onChange={(e) => setNewContent(e.target.value)}
           />
-          <button type="submit" className="hud-btn hud-btn-primary" disabled={!newContent.trim()}>
+          <button
+            type="submit"
+            className="hud-btn hud-btn-primary"
+            disabled={!newContent.trim()}
+          >
             <Plus size={14} />
             <span>Add</span>
           </button>
         </form>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxHeight: '350px', overflowY: 'auto' }}>
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '10px',
+            maxHeight: '350px',
+            overflowY: 'auto',
+          }}
+        >
           {memories.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+            <div
+              style={{
+                textAlign: 'center',
+                padding: '24px',
+                color: 'var(--text-muted)',
+                fontFamily: 'var(--font-mono)',
+              }}
+            >
               No memories recorded in local store.
             </div>
           ) : (
@@ -105,15 +138,32 @@ export const MemoryViewer: React.FC<MemoryViewerProps> = ({
                 }}
               >
                 <div style={{ flex: 1 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                    <span className="hud-tag">{mem.category.toUpperCase()}</span>
-                    <span style={{ fontSize: '10px', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      marginBottom: '4px',
+                    }}
+                  >
+                    <span className="hud-tag">
+                      {mem.category.toUpperCase()}
+                    </span>
+                    <span
+                      style={{
+                        fontSize: '10px',
+                        color: 'var(--text-muted)',
+                        fontFamily: 'var(--font-mono)',
+                      }}
+                    >
                       {mem.createdAt}
                     </span>
                   </div>
 
                   {editingId === mem.id ? (
-                    <div style={{ display: 'flex', gap: '6px', marginTop: '6px' }}>
+                    <div
+                      style={{ display: 'flex', gap: '6px', marginTop: '6px' }}
+                    >
                       <input
                         type="text"
                         className="form-input"
@@ -122,12 +172,21 @@ export const MemoryViewer: React.FC<MemoryViewerProps> = ({
                         onChange={(e) => setEditText(e.target.value)}
                         autoFocus
                       />
-                      <button className="hud-btn hud-btn-icon" onClick={() => handleSaveEdit(mem.id)}>
+                      <button
+                        className="hud-btn hud-btn-icon"
+                        onClick={() => handleSaveEdit(mem.id)}
+                      >
                         <Check size={14} color="#86efac" />
                       </button>
                     </div>
                   ) : (
-                    <div style={{ fontSize: '13px', color: 'var(--text-primary)', userSelect: 'text' }}>
+                    <div
+                      style={{
+                        fontSize: '13px',
+                        color: 'var(--text-primary)',
+                        userSelect: 'text',
+                      }}
+                    >
                       {mem.content}
                     </div>
                   )}

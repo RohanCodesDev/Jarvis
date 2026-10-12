@@ -61,14 +61,16 @@ export const JarvisHUD: React.FC = () => {
       timestamp: new Date().toLocaleTimeString('en-US', { hour12: false }),
       level: 'info',
       category: 'system',
-      message: 'Solar Particle Globe WebGL2 shader active. Hardware acceleration verified.',
+      message:
+        'Solar Particle Globe WebGL2 shader active. Hardware acceleration verified.',
     },
     {
       id: 'act-2',
       timestamp: new Date().toLocaleTimeString('en-US', { hour12: false }),
       level: 'success',
       category: 'security',
-      message: 'Preload IPC bridge active. Sandboxed context isolation enforced.',
+      message:
+        'Preload IPC bridge active. Sandboxed context isolation enforced.',
     },
   ]);
 
@@ -81,7 +83,8 @@ export const JarvisHUD: React.FC = () => {
     },
     {
       id: 'mem-2',
-      content: 'Interface: Minimalist Stark Industries HUD with dominant Solar Particle Globe.',
+      content:
+        'Interface: Minimalist Stark Industries HUD with dominant Solar Particle Globe.',
       category: 'preference',
       createdAt: '2026-10-12 11:43',
     },
@@ -89,29 +92,77 @@ export const JarvisHUD: React.FC = () => {
 
   const speechTimeoutRef = useRef<number | null>(null);
 
-  const addActivity = useCallback((level: ActivityItem['level'], category: ActivityItem['category'], message: string) => {
-    const item: ActivityItem = {
-      id: 'act-' + Date.now() + '-' + Math.random().toString(36).substring(2, 5),
-      timestamp: new Date().toLocaleTimeString('en-US', { hour12: false }),
-      level,
-      category,
-      message,
-    };
-    setActivities((prev) => [...prev.slice(-25), item]);
+  const addActivity = useCallback(
+    (
+      level: ActivityItem['level'],
+      category: ActivityItem['category'],
+      message: string,
+    ) => {
+      const item: ActivityItem = {
+        id:
+          'act-' +
+          Date.now() +
+          '-' +
+          Math.random().toString(36).substring(2, 5),
+        timestamp: new Date().toLocaleTimeString('en-US', { hour12: false }),
+        level,
+        category,
+        message,
+      };
+      setActivities((prev) => [...prev.slice(-25), item]);
 
-    if (window.jarvisDesktop?.logActivity) {
-      window.jarvisDesktop.logActivity({ level, category, message }).catch(() => {});
-    }
-  }, []);
+      if (window.jarvisDesktop?.logActivity) {
+        window.jarvisDesktop
+          .logActivity({ level, category, message })
+          .catch(() => {});
+      }
+    },
+    [],
+  );
 
-  // Check desktop bridge on mount
+  // Check desktop bridge and load persisted settings on mount
   useEffect(() => {
     if (window.jarvisDesktop?.getSystemInfo) {
-      window.jarvisDesktop.getSystemInfo().then((info) => {
-        addActivity('success', 'system', `Desktop Bridge active: ${info.platform} (${info.arch}), Electron ${info.electronVersion}`);
-      }).catch((err) => {
-        addActivity('warn', 'system', `Desktop bridge unavailable: ${err.message}`);
-      });
+      window.jarvisDesktop
+        .getSystemInfo()
+        .then((info) => {
+          addActivity(
+            'success',
+            'system',
+            `Desktop Bridge active: ${info.platform} (${info.arch}), Electron ${info.electronVersion}`,
+          );
+        })
+        .catch((err) => {
+          addActivity(
+            'warn',
+            'system',
+            `Desktop bridge unavailable: ${err.message}`,
+          );
+        });
+    }
+
+    if (window.jarvisDesktop?.getSettings) {
+      window.jarvisDesktop
+        .getSettings()
+        .then((loadedSettings) => {
+          setSettings(loadedSettings);
+          setTelemetry((prev) => ({
+            ...prev,
+            activeModel:
+              loadedSettings.cloudProvider === 'openrouter'
+                ? loadedSettings.openRouterModel
+                : loadedSettings.ollamaModel,
+            connectionStatus: loadedSettings.hasApiKey ? 'connected' : 'mock',
+          }));
+          if (loadedSettings.hasApiKey) {
+            addActivity(
+              'success',
+              'security',
+              'Hardware-encrypted credentials active via safeStorage.',
+            );
+          }
+        })
+        .catch(() => {});
     }
   }, [addActivity]);
 
@@ -139,39 +190,53 @@ export const JarvisHUD: React.FC = () => {
     addActivity('warn', 'ai', 'Manual directive override: Subsystem halted.');
   }, [addActivity]);
 
-  const handleManualStateChange = useCallback((nextState: AssistantState) => {
-    if (nextState === 'idle') {
-      handleHalt();
-    } else {
-      if (speechTimeoutRef.current) {
-        clearTimeout(speechTimeoutRef.current);
-        speechTimeoutRef.current = null;
+  const handleManualStateChange = useCallback(
+    (nextState: AssistantState) => {
+      if (nextState === 'idle') {
+        handleHalt();
+      } else {
+        if (speechTimeoutRef.current) {
+          clearTimeout(speechTimeoutRef.current);
+          speechTimeoutRef.current = null;
+        }
+        setAssistantState(nextState);
+        addActivity(
+          'info',
+          'system',
+          `Orb state changed: ${nextState.toUpperCase()}`,
+        );
       }
-      setAssistantState(nextState);
-      addActivity('info', 'system', `Orb state changed: ${nextState.toUpperCase()}`);
-    }
-  }, [handleHalt, addActivity]);
+    },
+    [handleHalt, addActivity],
+  );
 
-  const speakText = useCallback((text: string, onEnd: () => void) => {
-    if (!telemetry.speakerEnabled || !settings.speechEnabled || !('speechSynthesis' in window)) {
-      speechTimeoutRef.current = window.setTimeout(onEnd, 1400);
-      return;
-    }
+  const speakText = useCallback(
+    (text: string, onEnd: () => void) => {
+      if (
+        !telemetry.speakerEnabled ||
+        !settings.speechEnabled ||
+        !('speechSynthesis' in window)
+      ) {
+        speechTimeoutRef.current = window.setTimeout(onEnd, 1400);
+        return;
+      }
 
-    try {
-      window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.rate = 1.05;
-      utterance.pitch = 0.95;
+      try {
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.rate = 1.05;
+        utterance.pitch = 0.95;
 
-      utterance.onend = () => onEnd();
-      utterance.onerror = () => onEnd();
+        utterance.onend = () => onEnd();
+        utterance.onerror = () => onEnd();
 
-      window.speechSynthesis.speak(utterance);
-    } catch {
-      onEnd();
-    }
-  }, [telemetry.speakerEnabled, settings.speechEnabled]);
+        window.speechSynthesis.speak(utterance);
+      } catch {
+        onEnd();
+      }
+    },
+    [telemetry.speakerEnabled, settings.speechEnabled],
+  );
 
   const handleSendMessage = (text: string) => {
     if (!text.trim() || assistantState === 'thinking') return;
@@ -187,7 +252,11 @@ export const JarvisHUD: React.FC = () => {
 
     setMessages((prev) => [...prev, userMsg]);
     setAssistantState('thinking');
-    addActivity('info', 'ai', `Directive received: "${text.length > 25 ? text.substring(0, 25) + '...' : text}"`);
+    addActivity(
+      'info',
+      'ai',
+      `Directive received: "${text.length > 25 ? text.substring(0, 25) + '...' : text}"`,
+    );
 
     const startTime = performance.now();
     setTimeout(() => {
@@ -200,11 +269,17 @@ export const JarvisHUD: React.FC = () => {
       } else if (lower.includes('memory') || lower.includes('bank')) {
         responseText = `Accessing memory banks: ${memories.length} durable records indexed in local store. Sector integrity verified.`;
       } else if (lower.includes('audio') || lower.includes('harmonic')) {
-        responseText = 'Acoustic visualizer synchronized. Harmonic carrier frequencies transmitting at 1420.4 MHz.';
+        responseText =
+          'Acoustic visualizer synchronized. Harmonic carrier frequencies transmitting at 1420.4 MHz.';
       } else if (lower.includes('alert') || lower.includes('defcon')) {
-        responseText = 'Defcon alert simulated. Quantum core shifting to amber alert matrix.';
+        responseText =
+          'Defcon alert simulated. Quantum core shifting to amber alert matrix.';
         setAssistantState('error');
-        addActivity('warn', 'security', 'Simulated Defcon-1 alert protocol activated.');
+        addActivity(
+          'warn',
+          'security',
+          'Simulated Defcon-1 alert protocol activated.',
+        );
         return;
       }
 
@@ -221,11 +296,19 @@ export const JarvisHUD: React.FC = () => {
 
       setMessages((prev) => [...prev, jarvisMsg]);
       setAssistantState('speaking');
-      addActivity('success', 'ai', `Synthesizing vocal response (${elapsed}ms).`);
+      addActivity(
+        'success',
+        'ai',
+        `Synthesizing vocal response (${elapsed}ms).`,
+      );
 
       speakText(responseText, () => {
         setAssistantState('idle');
-        addActivity('info', 'system', 'Voice playback complete. Core standing by.');
+        addActivity(
+          'info',
+          'system',
+          'Voice playback complete. Core standing by.',
+        );
       });
     }, 1100);
   };
@@ -238,7 +321,11 @@ export const JarvisHUD: React.FC = () => {
     }
 
     setAssistantState('listening');
-    addActivity('info', 'voice', 'Audio transcriber engaged. Listening for vocal directive...');
+    addActivity(
+      'info',
+      'voice',
+      'Audio transcriber engaged. Listening for vocal directive...',
+    );
 
     setTimeout(() => {
       setAssistantState('idle');
@@ -260,7 +347,11 @@ export const JarvisHUD: React.FC = () => {
       if (!next && 'speechSynthesis' in window) {
         window.speechSynthesis.cancel();
       }
-      addActivity('info', 'voice', `Acoustic playback ${next ? 'engaged' : 'muted'}.`);
+      addActivity(
+        'info',
+        'voice',
+        `Acoustic playback ${next ? 'engaged' : 'muted'}.`,
+      );
       return { ...prev, speakerEnabled: next };
     });
   };
@@ -273,11 +364,18 @@ export const JarvisHUD: React.FC = () => {
         newSettings.cloudProvider === 'openrouter'
           ? newSettings.openRouterModel
           : newSettings.ollamaModel,
+      connectionStatus: newSettings.hasApiKey ? 'connected' : 'mock',
     }));
+    if (window.jarvisDesktop?.saveSettings) {
+      window.jarvisDesktop.saveSettings(newSettings).catch(() => {});
+    }
     addActivity('success', 'system', 'Updated tactical parameters.');
   };
 
-  const handleAddMemory = (content: string, category: UserMemoryItem['category']) => {
+  const handleAddMemory = (
+    content: string,
+    category: UserMemoryItem['category'],
+  ) => {
     const item: UserMemoryItem = {
       id: 'mem-' + Date.now(),
       content,
@@ -285,7 +383,11 @@ export const JarvisHUD: React.FC = () => {
       createdAt: new Date().toLocaleString(),
     };
     setMemories((prev) => [item, ...prev]);
-    addActivity('info', 'system', `Memory banked: "${content.substring(0, 20)}..."`);
+    addActivity(
+      'info',
+      'system',
+      `Memory banked: "${content.substring(0, 20)}..."`,
+    );
   };
 
   const handleDeleteMemory = (id: string) => {
@@ -295,7 +397,7 @@ export const JarvisHUD: React.FC = () => {
 
   const handleUpdateMemory = (id: string, newContent: string) => {
     setMemories((prev) =>
-      prev.map((m) => (m.id === id ? { ...m, content: newContent } : m))
+      prev.map((m) => (m.id === id ? { ...m, content: newContent } : m)),
     );
     addActivity('info', 'system', `Updated memory ID ${id}`);
   };
@@ -324,10 +426,7 @@ export const JarvisHUD: React.FC = () => {
         <DialogueToast message={latestMessage} />
 
         {/* Big Solar Particle Globe Centerpiece */}
-        <AssistantOrb
-          state={assistantState}
-          onInterrupt={handleHalt}
-        />
+        <AssistantOrb state={assistantState} onInterrupt={handleHalt} />
 
         {/* Minimalist Floating Command Input */}
         <CommandDock
@@ -348,6 +447,7 @@ export const JarvisHUD: React.FC = () => {
         isOpen={drawerOpen}
         onClose={() => setDrawerOpen(false)}
         messages={messages}
+        activities={activities}
         onClearMessages={() => setMessages([])}
       />
 

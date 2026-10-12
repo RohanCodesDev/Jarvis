@@ -8,6 +8,21 @@ const desktopAPI: DesktopBridgeAPI = {
   logActivity: async (item) => {
     return ipcRenderer.invoke('desktop:logActivity', item);
   },
+  hasApiKey: async () => {
+    return ipcRenderer.invoke('desktop:hasApiKey');
+  },
+  setApiKey: async (key: string) => {
+    return ipcRenderer.invoke('desktop:setApiKey', key);
+  },
+  deleteApiKey: async () => {
+    return ipcRenderer.invoke('desktop:deleteApiKey');
+  },
+  getSettings: async () => {
+    return ipcRenderer.invoke('desktop:getSettings');
+  },
+  saveSettings: async (settings) => {
+    return ipcRenderer.invoke('desktop:saveSettings', settings);
+  },
 };
 
 contextBridge.exposeInMainWorld('jarvisDesktop', desktopAPI);

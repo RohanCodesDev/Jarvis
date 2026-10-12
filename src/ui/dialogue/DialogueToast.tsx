@@ -14,9 +14,7 @@ export const DialogueToast: React.FC<DialogueToastProps> = ({ message }) => {
         <span>{message.sender === 'user' ? 'YOU' : 'JARVIS'}</span>
         <span>{message.timestamp}</span>
       </div>
-      <div className="floating-dialogue-text">
-        {message.text}
-      </div>
+      <div className="floating-dialogue-text">{message.text}</div>
     </div>
   );
 };

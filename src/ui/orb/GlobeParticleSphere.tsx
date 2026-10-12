@@ -1,7 +1,7 @@
 // Solar Particle Globe — Originkit (WebGL2) with Fluid Cognitive Vortex & Natural Acoustics
 
-import * as React from "react";
-import { useEffect, useRef } from "react";
+import * as React from 'react';
+import { useEffect, useRef } from 'react';
 
 const DOT_REF_PX = 1.35;
 const SPIN_RAD_PER_SEC = 0.22;
@@ -20,12 +20,17 @@ const CURSOR_EASE = 10;
 const TAU = Math.PI * 2;
 
 export type CursorOptions = {
-  mode?: "attract" | "repel";
+  mode?: 'attract' | 'repel';
   strength?: number;
   reach?: number;
 };
 
-export type AssistantOrbState = 'idle' | 'listening' | 'thinking' | 'speaking' | 'error';
+export type AssistantOrbState =
+  | 'idle'
+  | 'listening'
+  | 'thinking'
+  | 'speaking'
+  | 'error';
 
 export type GlobeParticleSphereProps = {
   background?: string;
@@ -53,22 +58,27 @@ type Live = {
 };
 
 const DEFAULTS = {
-  background: "transparent",
-  colors: ["#00f0ff", "#0088ff", "#a5f3fc"],
+  background: 'transparent',
+  colors: ['#00f0ff', '#0088ff', '#a5f3fc'],
   density: 100,
   dotSize: 100,
   speed: 50,
   size: 100,
   cursor: {
-    mode: "repel" as "attract" | "repel",
+    mode: 'repel' as 'attract' | 'repel',
     strength: 50,
     reach: 25,
   },
-  state: "idle" as AssistantOrbState,
+  state: 'idle' as AssistantOrbState,
 };
 
-function num(value: unknown, min: number, max: number, fallback: number): number {
-  const n = typeof value === "number" && isFinite(value) ? value : fallback;
+function num(
+  value: unknown,
+  min: number,
+  max: number,
+  fallback: number,
+): number {
+  const n = typeof value === 'number' && isFinite(value) ? value : fallback;
   return Math.max(min, Math.min(max, n));
 }
 
@@ -89,17 +99,17 @@ function parseColor(input: string, fallback: string): [number, number, number] {
 
   let output: [number, number, number] = [1, 1, 1];
 
-  if (typeof document !== "undefined") {
+  if (typeof document !== 'undefined') {
     if (!colorCtx) {
-      colorCtx = document.createElement("canvas").getContext("2d");
+      colorCtx = document.createElement('canvas').getContext('2d');
     }
 
     if (colorCtx) {
-      colorCtx.fillStyle = "#000";
+      colorCtx.fillStyle = '#000';
       colorCtx.fillStyle = value;
       const normalized = String(colorCtx.fillStyle);
 
-      if (normalized[0] === "#") {
+      if (normalized[0] === '#') {
         output = [
           parseInt(normalized.slice(1, 3), 16) / 255,
           parseInt(normalized.slice(3, 5), 16) / 255,
@@ -119,7 +129,9 @@ function parseColor(input: string, fallback: string): [number, number, number] {
 }
 
 function buildPalette(colors: string[]): { data: Float32Array; count: number } {
-  const list = (Array.isArray(colors) && colors.length > 0 ? colors : DEFAULTS.colors).slice(0, MAX_COLORS);
+  const list = (
+    Array.isArray(colors) && colors.length > 0 ? colors : DEFAULTS.colors
+  ).slice(0, MAX_COLORS);
   const count = Math.max(1, list.length);
   const data = new Float32Array(MAX_COLORS * 3);
 
@@ -343,7 +355,7 @@ export function GlobeParticleSphere(props: GlobeParticleSphereProps) {
     dotSize: num(dotSize, 10, 400, DEFAULTS.dotSize),
     speed: num(speed, 0, 100, DEFAULTS.speed),
     size: num(size, 10, 100, DEFAULTS.size),
-    cursorSign: (cursor.mode ?? DEFAULTS.cursor.mode) === "attract" ? -1 : 1,
+    cursorSign: (cursor.mode ?? DEFAULTS.cursor.mode) === 'attract' ? -1 : 1,
     strength: num(cursor.strength, 0, 100, DEFAULTS.cursor.strength),
     reach: num(cursor.reach, 1, 100, DEFAULTS.cursor.reach),
     state: state ?? 'idle',
@@ -357,7 +369,7 @@ export function GlobeParticleSphere(props: GlobeParticleSphereProps) {
     const canvas = canvasRef.current;
     if (!root || !canvas) return;
 
-    const gl = canvas.getContext("webgl2", {
+    const gl = canvas.getContext('webgl2', {
       alpha: true,
       antialias: false,
       premultipliedAlpha: true,
@@ -369,15 +381,24 @@ export function GlobeParticleSphere(props: GlobeParticleSphereProps) {
     let audioCtx: AudioContext | null = null;
     let analyser: AnalyserNode | null = null;
     let micStream: MediaStream | null = null;
-    let audioDataArray: Uint8Array | null = null;
+    let audioDataArray: Uint8Array<ArrayBuffer> | null = null;
     let micVolumeSmoothed = 0;
+    let isSettingUpMic = false;
 
     const setupMicListener = async () => {
-      if (micStream || !navigator.mediaDevices?.getUserMedia) return;
+      if (micStream || isSettingUpMic || !navigator.mediaDevices?.getUserMedia)
+        return;
+      isSettingUpMic = true;
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: true,
+          video: false,
+        });
         micStream = stream;
-        const AudioCtxClass = window.AudioContext || (window as any).webkitAudioContext;
+        const AudioCtxClass =
+          window.AudioContext ||
+          (window as unknown as { webkitAudioContext?: typeof AudioContext })
+            .webkitAudioContext;
         if (!AudioCtxClass) return;
         audioCtx = new AudioCtxClass();
         const source = audioCtx.createMediaStreamSource(stream);
@@ -385,13 +406,15 @@ export function GlobeParticleSphere(props: GlobeParticleSphereProps) {
         analyser.fftSize = 128;
         analyser.smoothingTimeConstant = 0.75;
         source.connect(analyser);
-        audioDataArray = new Uint8Array(analyser.frequencyBinCount);
+        audioDataArray = new Uint8Array(
+          new ArrayBuffer(analyser.frequencyBinCount),
+        );
       } catch {
         // Mic not granted or not present; gracefully falls back to quiet acoustic stillness
+      } finally {
+        isSettingUpMic = false;
       }
     };
-
-    setupMicListener();
 
     const compileShader = (type: number, source: string) => {
       const shader = gl.createShader(type)!;
@@ -417,26 +440,26 @@ export function GlobeParticleSphere(props: GlobeParticleSphereProps) {
     const getUniform = (name: string) => gl.getUniformLocation(program, name);
 
     const u = {
-      res: getUniform("uRes"),
-      dpr: getUniform("uDpr"),
-      center: getUniform("uCenter"),
-      radius: getUniform("uRadius"),
-      spin: getUniform("uSpin"),
-      clock: getUniform("uClock"),
-      dot: getUniform("uDot"),
-      colors: getUniform("uColors[0]"),
-      colorCount: getUniform("uColorCount"),
-      pointer: getUniform("uPointer"),
-      push: getUniform("uPush"),
-      pull: getUniform("uPull"),
-      reach: getUniform("uReach"),
-      vibration: getUniform("uVibration"),
-      waveAmp: getUniform("uWaveAmp"),
-      waveFreq: getUniform("uWaveFreq"),
-      pulse: getUniform("uPulse"),
-      twinkleBoost: getUniform("uTwinkleBoost"),
-      tilt: getUniform("uTilt"),
-      flow: getUniform("uFlowStrength"),
+      res: getUniform('uRes'),
+      dpr: getUniform('uDpr'),
+      center: getUniform('uCenter'),
+      radius: getUniform('uRadius'),
+      spin: getUniform('uSpin'),
+      clock: getUniform('uClock'),
+      dot: getUniform('uDot'),
+      colors: getUniform('uColors[0]'),
+      colorCount: getUniform('uColorCount'),
+      pointer: getUniform('uPointer'),
+      push: getUniform('uPush'),
+      pull: getUniform('uPull'),
+      reach: getUniform('uReach'),
+      vibration: getUniform('uVibration'),
+      waveAmp: getUniform('uWaveAmp'),
+      waveFreq: getUniform('uWaveFreq'),
+      pulse: getUniform('uPulse'),
+      twinkleBoost: getUniform('uTwinkleBoost'),
+      tilt: getUniform('uTilt'),
+      flow: getUniform('uFlowStrength'),
     };
 
     const vao = gl.createVertexArray();
@@ -513,13 +536,16 @@ export function GlobeParticleSphere(props: GlobeParticleSphereProps) {
       pointerInside = false;
     };
 
-    root.addEventListener("pointermove", handlePointerMove as EventListener);
-    root.addEventListener("pointerdown", handlePointerMove as EventListener);
-    root.addEventListener("pointerleave", handlePointerLeave as EventListener);
+    root.addEventListener('pointermove', handlePointerMove as EventListener);
+    root.addEventListener('pointerdown', handlePointerMove as EventListener);
+    root.addEventListener('pointerleave', handlePointerLeave as EventListener);
 
     const render = (time: number) => {
       animationFrame = requestAnimationFrame(render);
-      const deltaTime = lastTime < 0 ? 0 : Math.max(0, Math.min(0.05, (time - lastTime) / 1000));
+      const deltaTime =
+        lastTime < 0
+          ? 0
+          : Math.max(0, Math.min(0.05, (time - lastTime) / 1000));
       lastTime = time;
 
       const c = config.current;
@@ -554,25 +580,39 @@ export function GlobeParticleSphere(props: GlobeParticleSphereProps) {
 
       // Sample live microphone volume if in listening mode
       let liveVoiceVolume = 0;
-      if (orbState === 'listening' && analyser && audioDataArray) {
-        analyser.getByteFrequencyData(audioDataArray);
-        let sum = 0;
-        const bins = Math.min(24, audioDataArray.length);
-        for (let i = 1; i < bins; i++) {
-          sum += audioDataArray[i];
+      if (orbState === 'listening') {
+        if (!micStream && !isSettingUpMic) {
+          setupMicListener();
         }
-        const rawVol = sum / (bins * 255);
-        // Noise threshold gate
-        const gated = rawVol < 0.035 ? 0 : (rawVol - 0.035) * 1.6;
-        liveVoiceVolume = Math.min(1.0, Math.max(0.0, gated));
+        if (audioCtx && audioCtx.state === 'suspended') {
+          audioCtx.resume().catch(() => {});
+        }
+        if (analyser && audioDataArray) {
+          analyser.getByteFrequencyData(audioDataArray);
+          let sum = 0;
+          const bins = Math.min(24, audioDataArray.length);
+          for (let i = 1; i < bins; i++) {
+            sum += audioDataArray[i];
+          }
+          const rawVol = sum / (bins * 255);
+          // Noise threshold gate
+          const gated = rawVol < 0.035 ? 0 : (rawVol - 0.035) * 1.6;
+          liveVoiceVolume = Math.min(1.0, Math.max(0.0, gated));
+        }
+      } else {
+        if (audioCtx && audioCtx.state === 'running') {
+          audioCtx.suspend().catch(() => {});
+        }
       }
-      micVolumeSmoothed += (liveVoiceVolume - micVolumeSmoothed) * (1 - Math.exp(-deltaTime * 18));
+      micVolumeSmoothed +=
+        (liveVoiceVolume - micVolumeSmoothed) * (1 - Math.exp(-deltaTime * 18));
 
       // 1. Sophisticated Directional Motion based on State:
       if (orbState === 'thinking') {
         // Thinking mode: Fluid cognitive vortex stream
         const cognitiveFlow = 1.15 + 0.35 * Math.sin(clock * 1.6);
-        rotation = (rotation + deltaTime * cognitiveFlow * SPIN_RAD_PER_SEC * 1.6) % TAU;
+        rotation =
+          (rotation + deltaTime * cognitiveFlow * SPIN_RAD_PER_SEC * 1.6) % TAU;
       } else if (orbState === 'listening') {
         rotation = (rotation + deltaTime * 0.16 * SPIN_RAD_PER_SEC) % TAU;
       } else if (orbState === 'speaking') {
@@ -581,7 +621,8 @@ export function GlobeParticleSphere(props: GlobeParticleSphereProps) {
       } else if (orbState === 'error') {
         rotation = (rotation + deltaTime * 1.6 * SPIN_RAD_PER_SEC) % TAU;
       } else {
-        rotation = (rotation + deltaTime * animationSpeed * SPIN_RAD_PER_SEC) % TAU;
+        rotation =
+          (rotation + deltaTime * animationSpeed * SPIN_RAD_PER_SEC) % TAU;
       }
 
       // 2. Physical targets for each state (NO VOIDS, NO ARTIFICIAL HOLES):
@@ -611,7 +652,9 @@ export function GlobeParticleSphere(props: GlobeParticleSphereProps) {
         targetTilt = SPIN_TILT + 0.05 * Math.sin(clock * 1.4);
         targetFlow = 0.55;
       } else if (orbState === 'speaking') {
-        const cadence = (Math.sin(clock * 3.2) * 0.5 + 0.5) * (Math.cos(clock * 1.6) * 0.35 + 0.65);
+        const cadence =
+          (Math.sin(clock * 3.2) * 0.5 + 0.5) *
+          (Math.cos(clock * 1.6) * 0.35 + 0.65);
         targetVibration = 0.004 + cadence * 0.008;
         targetWaveAmp = 0.022 + cadence * 0.02;
         targetWaveFreq = 4.5;
@@ -641,7 +684,8 @@ export function GlobeParticleSphere(props: GlobeParticleSphereProps) {
       const lerpSpeed = 1 - Math.exp(-deltaTime * 10);
       curVibration += (targetVibration - curVibration) * lerpSpeed;
       curWaveAmp += (targetWaveAmp - curWaveAmp) * lerpSpeed;
-      curWaveFreq += (targetWaveFreq - curWaveFreq) * (1 - Math.exp(-deltaTime * 8));
+      curWaveFreq +=
+        (targetWaveFreq - curWaveFreq) * (1 - Math.exp(-deltaTime * 8));
       curPulse += (targetPulse - curPulse) * (1 - Math.exp(-deltaTime * 12));
       curTwinkleBoost += (targetTwinkleBoost - curTwinkleBoost) * lerpSpeed;
       curTilt += (targetTilt - curTilt) * (1 - Math.exp(-deltaTime * 7));
@@ -672,13 +716,19 @@ export function GlobeParticleSphere(props: GlobeParticleSphereProps) {
       pointerY += (targetY - pointerY) * ease;
       presence += ((pointerInside ? 1 : 0) - presence) * ease;
 
-      const reach = Math.max(1, (c.reach / 100) * Math.hypot(width, height) * 0.5);
+      const reach = Math.max(
+        1,
+        (c.reach / 100) * Math.hypot(width, height) * 0.5,
+      );
 
       gl.uniform2f(u.pointer, pointerX, pointerY);
       gl.uniform1f(u.reach, reach);
 
       const strength = (c.strength / 100) * presence;
-      gl.uniform1f(u.push, c.cursorSign > 0 ? strength * CURSOR_PUSH * reach : 0);
+      gl.uniform1f(
+        u.push,
+        c.cursorSign > 0 ? strength * CURSOR_PUSH * reach : 0,
+      );
       gl.uniform1f(u.pull, c.cursorSign < 0 ? strength * CURSOR_PULL : 0);
 
       gl.clear(gl.COLOR_BUFFER_BIT);
@@ -688,12 +738,28 @@ export function GlobeParticleSphere(props: GlobeParticleSphereProps) {
 
     animationFrame = requestAnimationFrame(render);
 
+    const handleContextLost = (e: Event) => {
+      e.preventDefault();
+      cancelAnimationFrame(animationFrame);
+    };
+    canvas.addEventListener('webglcontextlost', handleContextLost, false);
+
     return () => {
       cancelAnimationFrame(animationFrame);
       resizeObserver.disconnect();
-      root.removeEventListener("pointermove", handlePointerMove as EventListener);
-      root.removeEventListener("pointerdown", handlePointerMove as EventListener);
-      root.removeEventListener("pointerleave", handlePointerLeave as EventListener);
+      canvas.removeEventListener('webglcontextlost', handleContextLost);
+      root.removeEventListener(
+        'pointermove',
+        handlePointerMove as EventListener,
+      );
+      root.removeEventListener(
+        'pointerdown',
+        handlePointerMove as EventListener,
+      );
+      root.removeEventListener(
+        'pointerleave',
+        handlePointerLeave as EventListener,
+      );
 
       if (micStream) {
         micStream.getTracks().forEach((t) => t.stop());
@@ -711,27 +777,27 @@ export function GlobeParticleSphere(props: GlobeParticleSphereProps) {
       ref={rootRef}
       className={className}
       style={{
-        position: "relative",
-        width: "100%",
-        height: "100%",
+        position: 'relative',
+        width: '100%',
+        height: '100%',
         background,
-        overflow: "hidden",
+        overflow: 'hidden',
         ...style,
       }}
     >
       <canvas
         ref={canvasRef}
         style={{
-          position: "absolute",
+          position: 'absolute',
           inset: 0,
-          width: "100%",
-          height: "100%",
-          display: "block",
+          width: '100%',
+          height: '100%',
+          display: 'block',
         }}
       />
     </div>
   );
 }
 
-GlobeParticleSphere.displayName = "Globe Particle Sphere";
+GlobeParticleSphere.displayName = 'Globe Particle Sphere';
 export default GlobeParticleSphere;
