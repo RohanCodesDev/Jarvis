@@ -569,7 +569,7 @@ export function GlobeParticleSphere(props: GlobeParticleSphereProps) {
       gl.uniform2f(u.center, 0, 0);
 
       const shortestSide = Math.min(width, height);
-      const maximumRadius = shortestSide * 0.465;
+      const maximumRadius = shortestSide * 0.44;
       const requestedRadius = (c.size / 100) * maximumRadius;
       const radius = Math.min(requestedRadius, maximumRadius);
 

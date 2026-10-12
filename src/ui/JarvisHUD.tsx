@@ -49,9 +49,8 @@ export const JarvisHUD: React.FC = () => {
     {
       id: 'msg-init-1',
       sender: 'jarvis',
-      text: 'Stark Industries Tactical Core initialized on Windows 11. Standing by for directives, sir.',
+      text: 'Hello sir. Systems are online and ready for your command.',
       timestamp: new Date().toLocaleTimeString('en-US', { hour12: false }),
-      metadata: { modelUsed: 'Quantum Core MK-85', durationMs: 8 },
     },
   ]);
 

@@ -16,21 +16,19 @@ export const TacticalDialogueStream: React.FC<TacticalDialogueStreamProps> = ({
   // Determine active text to display with typewriter animation
   let activeText =
     latestMessage?.text ||
-    'Stark Industries Core initialized. Standing by for directives, sir.';
+    'Hello sir. Systems are online and ready for your command.';
 
   if (assistantState === 'thinking') {
-    activeText = 'COGNITIVE ENGINE ENGAGED // Synthesizing response stream...';
+    activeText = 'Thinking... Processing your request.';
   } else if (assistantState === 'listening') {
-    activeText =
-      'ACOUSTIC CAPTURE ACTIVE // Monitoring harmonic voice frequencies...';
+    activeText = 'Listening... Speak your command.';
   } else if (assistantState === 'error') {
-    activeText =
-      'DEFCON-1 ALERT MATRIX ENGAGED // Core defensive override simulated.';
+    activeText = 'Alert. Defensive protocol simulated.';
   }
 
   const { displayedText, cursorVisible, isTyping } = useTypewriter(activeText);
 
-  // Identify operator query if the latest was jarvis or if previous was user
+  // Identify operator query
   const operatorText =
     latestMessage?.sender === 'user'
       ? latestMessage.text
@@ -41,42 +39,40 @@ export const TacticalDialogueStream: React.FC<TacticalDialogueStreamProps> = ({
   return (
     <div
       className="hacker-dialogue-flank"
-      aria-label="Tactical Dialogue Stream"
+      aria-label="Messages Stream"
     >
-      {/* 1. Technical Stream Header */}
+      {/* 1. Clean Header */}
       <div className="hacker-stream-header">
-        <span className="hacker-tag">// DIRECTIVE_CONSOLE</span>
-        <span className="hacker-meta">CH-01 [0x85_TGT]</span>
+        <span className="hacker-tag">// MESSAGES</span>
+        <span className="hacker-meta">LIVE</span>
       </div>
 
-      {/* 2. Previous Operator Directive (Dimmed Hologram) */}
+      {/* 2. Previous User Query */}
       {operatorText && (
         <div className="hacker-operator-line">
           <span className="hacker-prompt-symbol">&gt;</span>
-          <span className="hacker-operator-label">OPERATOR:</span>
+          <span className="hacker-operator-label">YOU:</span>
           <span className="hacker-operator-content">
             &ldquo;{operatorText}&rdquo;
           </span>
         </div>
       )}
 
-      {/* 3. Real-Time Dynamic Typewriter Stream */}
+      {/* 3. Real-Time Typewriter Stream */}
       <div className="hacker-response-line">
         <div className="hacker-response-meta">
           <span className="hacker-prefix">
             {assistantState === 'thinking'
-              ? ':: COGNITIVE_INFERENCE'
+              ? 'JARVIS (thinking...)'
               : assistantState === 'listening'
-                ? ':: ACOUSTIC_STREAM'
+                ? 'JARVIS (listening...)'
                 : assistantState === 'error'
-                  ? ':: ALERT_OVERRIDE'
-                  : ':: JARVIS_OUTPUT'}
+                  ? 'SYSTEM ALERT'
+                  : 'JARVIS'}
           </span>
           <span className="hacker-timestamp">
-            [
             {latestMessage?.timestamp ||
               new Date().toLocaleTimeString('en-US', { hour12: false })}
-            ]
           </span>
         </div>
 
@@ -90,16 +86,15 @@ export const TacticalDialogueStream: React.FC<TacticalDialogueStreamProps> = ({
         </div>
       </div>
 
-      {/* 4. Tactical Coordinate / Telemetry Subscript */}
+      {/* 4. Minimal Status Footer */}
       <div className="hacker-stream-footer">
         <span>STATUS: {assistantState.toUpperCase()}</span>
         <span>•</span>
-        <span>ENCRYPT: OS_DPAPI</span>
-        <span>•</span>
-        <span>FPS: 60</span>
+        <span>SECURE</span>
       </div>
     </div>
   );
 };
 
 export default TacticalDialogueStream;
+
