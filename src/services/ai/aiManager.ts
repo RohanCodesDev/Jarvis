@@ -4,27 +4,40 @@ import {
   type SendMessageOptions,
 } from './types';
 import { OpenRouterProvider } from './openrouterProvider';
+import { GroqProvider } from './groqProvider';
 import { MockAIProvider } from './mockProvider';
-import { getApiKey, hasApiKey } from '../secretStore';
+import { getApiKey, hasApiKey, getGroqKey, hasGroqKey } from '../secretStore';
+import { loadSettings } from '../settingsStore';
 
 export class AIManager {
   private openRouterProvider: OpenRouterProvider;
+  private groqProvider: GroqProvider;
   private mockProvider: MockAIProvider;
   private activeStreams: Map<string, AbortController> = new Map();
 
   constructor() {
     this.openRouterProvider = new OpenRouterProvider(() => getApiKey());
+    this.groqProvider = new GroqProvider(() => getGroqKey());
     this.mockProvider = new MockAIProvider();
   }
 
   /**
-   * Determine the current provider: OpenRouter if configured, otherwise mock fallback.
+   * Determine the current provider: OpenRouter, Groq, or Mock fallback.
    */
   public getActiveProvider(preferMock = false): AIProvider {
-    if (preferMock || !hasApiKey()) {
-      return this.mockProvider;
+    if (preferMock) return this.mockProvider;
+
+    const settings = loadSettings();
+    if (settings.cloudProvider === 'groq' && hasGroqKey()) {
+      return this.groqProvider;
     }
-    return this.openRouterProvider;
+    if (hasApiKey()) {
+      return this.openRouterProvider;
+    }
+    if (hasGroqKey()) {
+      return this.groqProvider;
+    }
+    return this.mockProvider;
   }
 
   /**
@@ -37,11 +50,27 @@ export class AIManager {
   }
 
   /**
+   * Validate an API key with the Groq provider.
+   */
+  public async validateGroqKey(
+    key: string,
+  ): Promise<{ valid: boolean; error?: string }> {
+    return this.groqProvider.validateKey(key);
+  }
+
+  /**
    * List available models.
    */
   public async getModels(): Promise<AIModelInfo[]> {
+    const settings = loadSettings();
+    if (settings.cloudProvider === 'groq' && hasGroqKey()) {
+      return this.groqProvider.getModels();
+    }
     if (hasApiKey()) {
       return this.openRouterProvider.getModels();
+    }
+    if (hasGroqKey()) {
+      return this.groqProvider.getModels();
     }
     return this.mockProvider.getModels();
   }

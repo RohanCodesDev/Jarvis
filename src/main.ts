@@ -20,6 +20,9 @@ import {
   hasApiKey,
   deleteApiKey,
   isSecretStorageAvailable,
+  storeGroqKey,
+  hasGroqKey,
+  deleteGroqKey,
 } from './services/secretStore';
 import { loadSettings, saveSettings } from './services/settingsStore';
 import { aiManager } from './services/ai/aiManager';
@@ -86,7 +89,47 @@ function setupIpcHandlers() {
     }
     const settings = loadSettings();
     settings.hasApiKey = hasApiKey();
+    settings.hasGroqKey = hasGroqKey();
     return settings;
+  });
+
+  ipcMain.handle('desktop:hasGroqKey', async (event) => {
+    if (!isValidSender(event)) throw new Error('Unauthorized IPC sender');
+    return hasGroqKey();
+  });
+
+  ipcMain.handle('desktop:setGroqKey', async (event, key: unknown) => {
+    if (!isValidSender(event)) throw new Error('Unauthorized IPC sender');
+    if (typeof key !== 'string' || !key.trim()) {
+      return { success: false, error: 'Invalid Groq API key' };
+    }
+    const success = storeGroqKey(key);
+    return { success, error: success ? undefined : 'Failed to encrypt secret' };
+  });
+
+  ipcMain.handle('desktop:deleteGroqKey', async (event) => {
+    if (!isValidSender(event)) throw new Error('Unauthorized IPC sender');
+    return { success: deleteGroqKey() };
+  });
+
+  ipcMain.handle('desktop:validateGroqKey', async (event, key: unknown) => {
+    if (!isValidSender(event)) throw new Error('Unauthorized IPC sender');
+    if (typeof key !== 'string' || !key.trim()) {
+      return { valid: false, error: 'Empty key provided' };
+    }
+    try {
+      const res = await fetch('https://api.groq.com/openai/v1/models', {
+        headers: { Authorization: `Bearer ${key.trim()}` },
+      });
+      if (res.ok) return { valid: true };
+      if (res.status === 401) {
+        return { valid: false, error: 'Invalid Groq API key' };
+      }
+      return { valid: false, error: `Groq error status ${res.status}` };
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return { valid: false, error: `Connection failed: ${msg}` };
+    }
   });
 
   ipcMain.handle('desktop:saveSettings', async (event, payload: unknown) => {

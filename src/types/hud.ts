@@ -47,10 +47,12 @@ export interface UserMemoryItem {
 export type HudTheme = 'cyan' | 'gold' | 'matrix' | 'crimson' | 'violet';
 
 export interface JarvisSettings {
-  cloudProvider: 'openrouter' | 'ollama';
+  cloudProvider: 'openrouter' | 'groq' | 'ollama';
   openRouterModel: string;
+  groqModel?: string;
   ollamaModel: string;
   hasApiKey: boolean;
+  hasGroqKey?: boolean;
   speechEnabled: boolean;
   voiceGender: 'male' | 'female';
   soundEffects: boolean;
@@ -81,6 +83,10 @@ export interface DesktopBridgeAPI {
   setApiKey: (key: string) => Promise<{ success: boolean; error?: string }>;
   deleteApiKey: () => Promise<{ success: boolean }>;
   validateApiKey: (key: string) => Promise<{ valid: boolean; error?: string }>;
+  hasGroqKey: () => Promise<boolean>;
+  setGroqKey: (key: string) => Promise<{ success: boolean; error?: string }>;
+  deleteGroqKey: () => Promise<{ success: boolean }>;
+  validateGroqKey: (key: string) => Promise<{ valid: boolean; error?: string }>;
   getSettings: () => Promise<JarvisSettings>;
   saveSettings: (
     settings: Partial<JarvisSettings>,

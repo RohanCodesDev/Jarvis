@@ -1,4 +1,4 @@
-import { getApiKey } from '../secretStore';
+import { getApiKey, getGroqKey } from '../secretStore';
 
 export interface TranscribeAudioParams {
   base64Audio: string;
@@ -19,15 +19,55 @@ export class WhisperTranscriber {
   }
 
   /**
-   * Transcribe recorded audio using OpenRouter Whisper or fallback.
+   * Transcribe recorded audio using Groq Free Whisper, OpenRouter Whisper, or fallback.
    */
   public async transcribe(
     params: TranscribeAudioParams,
   ): Promise<TranscribeAudioResult> {
     const key = this.getApiKey();
+    const groqKey = getGroqKey() || (key?.startsWith('gsk_') ? key : null);
+
+    // 1. Prioritize Groq Free Whisper API when configured
+    if (groqKey) {
+      try {
+        const binary = Buffer.from(params.base64Audio, 'base64');
+        const blob = new Blob([binary], { type: 'audio/webm' });
+        const formData = new FormData();
+        formData.append('file', blob, 'audio.webm');
+        formData.append('model', 'whisper-large-v3-turbo');
+
+        const groqRes = await fetch(
+          'https://api.groq.com/openai/v1/audio/transcriptions',
+          {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${groqKey}`,
+            },
+            body: formData,
+          },
+        );
+
+        if (groqRes.ok) {
+          const json = (await groqRes.json()) as { text?: string };
+          return {
+            text: json.text?.trim() || '',
+            source: 'whisper',
+          };
+        } else {
+          const errDetail = await groqRes.text().catch(() => '');
+          return {
+            text: '',
+            source: 'whisper',
+            error: `Groq Whisper failed (${groqRes.status}): ${errDetail}`,
+          };
+        }
+      } catch (groqErr) {
+        console.warn('[Whisper] Groq STT error:', groqErr);
+      }
+    }
 
     if (!key) {
-      // Mock / Offline fallback when API key is not configured
+      // Mock / Offline fallback when no key is configured
       return {
         text: 'Run complete desktop telemetry diagnostics',
         source: 'mock',
@@ -58,6 +98,15 @@ export class WhisperTranscriber {
       );
 
       if (!response.ok) {
+        if (response.status === 402) {
+          return {
+            text: '',
+            source: 'whisper',
+            error:
+              'OpenRouter audio requires at least $0.50 credit balance on your account. Text chat remains free with your chosen model!',
+          };
+        }
+
         const errorText = await response.text().catch(() => '');
         return {
           text: '',

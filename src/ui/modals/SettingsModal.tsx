@@ -31,6 +31,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [keyStatusMsg, setKeyStatusMsg] = useState<string | null>(null);
   const [savingKey, setSavingKey] = useState(false);
 
+  const [groqKeyInput, setGroqKeyInput] = useState('');
+  const [showGroqKey, setShowGroqKey] = useState(false);
+  const [groqKeyStatusMsg, setGroqKeyStatusMsg] = useState<string | null>(null);
+  const [savingGroqKey, setSavingGroqKey] = useState(false);
+
   const [modelsList, setModelsList] = useState<
     Array<{ id: string; name: string; isFree?: boolean }>
   >([
@@ -119,6 +124,62 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     }
   };
 
+  const handleSaveGroqKey = async () => {
+    const trimmed = groqKeyInput.trim();
+    if (!trimmed) return;
+    setSavingGroqKey(true);
+    setGroqKeyStatusMsg('Verifying key with Groq API...');
+    try {
+      if (window.jarvisDesktop?.validateGroqKey) {
+        try {
+          const validation =
+            await window.jarvisDesktop.validateGroqKey(trimmed);
+          if (!validation.valid) {
+            setGroqKeyStatusMsg(
+              `Verification warning: ${validation.error || 'Key rejected by Groq'}`,
+            );
+          }
+        } catch {}
+      }
+
+      if (window.jarvisDesktop?.setGroqKey) {
+        const res = await window.jarvisDesktop.setGroqKey(trimmed);
+        if (res.success) {
+          setFormData((prev) => ({ ...prev, hasGroqKey: true }));
+          setGroqKeyInput('');
+          setGroqKeyStatusMsg(
+            'Groq key encrypted and saved in OS safeStorage.',
+          );
+        } else {
+          setGroqKeyStatusMsg(
+            `Encryption failed: ${res.error || 'Unknown error'}`,
+          );
+        }
+      }
+    } catch (err: unknown) {
+      setGroqKeyStatusMsg(`Error: ${(err as Error).message}`);
+    } finally {
+      setSavingGroqKey(false);
+    }
+  };
+
+  const handleDeleteGroqKey = async () => {
+    setSavingGroqKey(true);
+    setGroqKeyStatusMsg(null);
+    try {
+      if (window.jarvisDesktop?.deleteGroqKey) {
+        await window.jarvisDesktop.deleteGroqKey();
+        setFormData((prev) => ({ ...prev, hasGroqKey: false }));
+        setGroqKeyInput('');
+        setGroqKeyStatusMsg('Groq key removed from secure storage.');
+      }
+    } catch (err: unknown) {
+      setGroqKeyStatusMsg(`Error: ${(err as Error).message}`);
+    } finally {
+      setSavingGroqKey(false);
+    }
+  };
+
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
     onSaveSettings(formData);
@@ -160,12 +221,18 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               onChange={(e) =>
                 setFormData({
                   ...formData,
-                  cloudProvider: e.target.value as 'openrouter' | 'ollama',
+                  cloudProvider: e.target.value as
+                    | 'openrouter'
+                    | 'groq'
+                    | 'ollama',
                 })
               }
             >
               <option value="openrouter">
-                OpenRouter (Cloud Engine - Recommended)
+                OpenRouter (Cloud Engine - 400+ Models)
+              </option>
+              <option value="groq">
+                Groq (Free Ultra-Fast Engine & Whisper STT)
               </option>
               <option value="ollama">
                 Ollama (Local Engine - Optional Stage 7)
@@ -188,6 +255,27 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     {m.name} {m.isFree ? '(Free Tier)' : ''}
                   </option>
                 ))}
+              </select>
+            </div>
+          ) : formData.cloudProvider === 'groq' ? (
+            <div className="form-group">
+              <label className="form-label">Groq Fast Model Identifier</label>
+              <select
+                className="form-select"
+                value={formData.groqModel || 'llama-3.3-70b-versatile'}
+                onChange={(e) =>
+                  setFormData({ ...formData, groqModel: e.target.value })
+                }
+              >
+                <option value="llama-3.3-70b-versatile">
+                  Llama 3.3 70B Versatile (Free - Flagship)
+                </option>
+                <option value="llama-3.1-8b-instant">
+                  Llama 3.1 8B Instant (Free - Ultra Speed)
+                </option>
+                <option value="mixtral-8x7b-32768">
+                  Mixtral 8x7B (Free - 32k Context)
+                </option>
               </select>
             </div>
           ) : (
@@ -316,7 +404,136 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               }}
             >
               Encrypted in OS credential store via Electron safeStorage (DPAPI).
-              Never accessible in frontend bundles.
+            </span>
+          </div>
+
+          {/* Groq Key Section for 100% Free Whisper STT & Ultra-Fast LLM */}
+          <div className="form-group">
+            <label
+              className="form-label"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+              }}
+            >
+              <div
+                style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+              >
+                <Key size={14} color="var(--cyan-primary)" />
+                <span>Groq API Key (Free Whisper & Ultra-Fast LLM)</span>
+              </div>
+              <span
+                className="hud-tag"
+                style={{
+                  color: formData.hasGroqKey ? '#86efac' : 'var(--text-dim)',
+                }}
+              >
+                {formData.hasGroqKey
+                  ? 'CONFIGURED (safeStorage)'
+                  : 'OPTIONAL (FREE)'}
+              </span>
+            </label>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <div style={{ position: 'relative', flex: 1 }}>
+                <input
+                  type={showGroqKey ? 'text' : 'password'}
+                  className="form-input"
+                  style={{ width: '100%', paddingRight: '36px' }}
+                  value={groqKeyInput}
+                  onChange={(e) => setGroqKeyInput(e.target.value)}
+                  placeholder={
+                    formData.hasGroqKey
+                      ? 'Replace stored Groq key...'
+                      : 'gsk_... (free at console.groq.com)'
+                  }
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowGroqKey(!showGroqKey)}
+                  style={{
+                    position: 'absolute',
+                    right: '10px',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    background: 'none',
+                    border: 'none',
+                    color: 'var(--text-dim)',
+                    cursor: 'pointer',
+                    padding: 0,
+                  }}
+                  title={showGroqKey ? 'Hide key' : 'Show key'}
+                >
+                  {showGroqKey ? <EyeOff size={14} /> : <Eye size={14} />}
+                </button>
+              </div>
+
+              {groqKeyInput.trim() && (
+                <button
+                  type="button"
+                  className="hud-btn hud-btn-primary"
+                  onClick={handleSaveGroqKey}
+                  disabled={savingGroqKey}
+                  style={{ whiteSpace: 'nowrap' }}
+                >
+                  <ShieldCheck size={14} />
+                  <span>{savingGroqKey ? 'Saving...' : 'Save Groq Key'}</span>
+                </button>
+              )}
+
+              {formData.hasGroqKey && !groqKeyInput.trim() && (
+                <button
+                  type="button"
+                  className="hud-btn"
+                  onClick={handleDeleteGroqKey}
+                  disabled={savingGroqKey}
+                  title="Purge stored Groq key from safeStorage"
+                  style={{ color: '#f87171' }}
+                >
+                  <Trash2 size={14} />
+                  <span>Remove</span>
+                </button>
+              )}
+            </div>
+
+            {groqKeyStatusMsg && (
+              <div
+                style={{
+                  fontSize: '11px',
+                  color:
+                    groqKeyStatusMsg.includes('Error') ||
+                    groqKeyStatusMsg.includes('warning')
+                      ? '#f87171'
+                      : '#86efac',
+                  marginTop: '4px',
+                }}
+              >
+                {groqKeyStatusMsg}
+              </div>
+            )}
+
+            <span
+              style={{
+                fontSize: '11px',
+                color: 'var(--text-muted)',
+                marginTop: '2px',
+              }}
+            >
+              Powers 100% free Whisper voice transcription (~300ms speed). Get a
+              free key at{' '}
+              <a
+                href="https://console.groq.com"
+                target="_blank"
+                rel="noreferrer"
+                style={{
+                  color: 'var(--cyan-primary)',
+                  textDecoration: 'underline',
+                }}
+              >
+                console.groq.com
+              </a>
+              .
             </span>
           </div>
 

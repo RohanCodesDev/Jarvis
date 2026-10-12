@@ -26,6 +26,18 @@ const desktopAPI: DesktopBridgeAPI = {
   validateApiKey: async (key: string) => {
     return ipcRenderer.invoke('desktop:validateApiKey', key);
   },
+  hasGroqKey: async () => {
+    return ipcRenderer.invoke('desktop:hasGroqKey');
+  },
+  setGroqKey: async (key: string) => {
+    return ipcRenderer.invoke('desktop:setGroqKey', key);
+  },
+  deleteGroqKey: async () => {
+    return ipcRenderer.invoke('desktop:deleteGroqKey');
+  },
+  validateGroqKey: async (key: string) => {
+    return ipcRenderer.invoke('desktop:validateGroqKey', key);
+  },
   getAvailableModels: async () => {
     return ipcRenderer.invoke('desktop:getAvailableModels');
   },

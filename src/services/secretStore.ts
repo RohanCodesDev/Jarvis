@@ -65,3 +65,45 @@ export function deleteApiKey(): boolean {
   }
   return false;
 }
+
+function getGroqSecretsPath(): string {
+  const userData = app?.getPath ? app.getPath('userData') : process.cwd();
+  return path.join(userData, 'jarvis-groq.bin');
+}
+
+export function storeGroqKey(key: string): boolean {
+  if (!safeStorage.isEncryptionAvailable()) {
+    console.warn('[SecretStore] OS safeStorage encryption unavailable');
+    return false;
+  }
+  const encrypted = safeStorage.encryptString(key.trim());
+  fs.writeFileSync(getGroqSecretsPath(), encrypted);
+  return true;
+}
+
+export function getGroqKey(): string | null {
+  const filePath = getGroqSecretsPath();
+  if (!fs.existsSync(filePath)) return null;
+  if (!safeStorage.isEncryptionAvailable()) return null;
+  try {
+    const encrypted = fs.readFileSync(filePath);
+    return safeStorage.decryptString(encrypted);
+  } catch (err) {
+    console.error('[SecretStore] Failed to decrypt Groq key:', err);
+    return null;
+  }
+}
+
+export function hasGroqKey(): boolean {
+  const filePath = getGroqSecretsPath();
+  return fs.existsSync(filePath);
+}
+
+export function deleteGroqKey(): boolean {
+  const filePath = getGroqSecretsPath();
+  if (fs.existsSync(filePath)) {
+    fs.unlinkSync(filePath);
+    return true;
+  }
+  return false;
+}
