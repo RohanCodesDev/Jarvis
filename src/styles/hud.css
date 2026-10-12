@@ -125,13 +125,49 @@
 /* Large Holographic Orb Viewport */
 .hero-orb-viewport {
   position: relative;
-  width: 540px;
-  height: 540px;
-  max-width: 90vh;
-  max-height: 90vh;
+  width: 820px;
+  height: 820px;
+  max-width: 85vh;
+  max-height: 85vh;
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+/* Ethereal Thinking Radial Aura directly at the back of the Orb */
+.orb-thinking-glow {
+  position: absolute;
+  width: 720px;
+  height: 720px;
+  max-width: 85vh;
+  max-height: 85vh;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(0, 160, 255, 0.4) 0%, rgba(99, 102, 241, 0.24) 42%, rgba(0, 240, 255, 0.08) 62%, transparent 74%);
+  filter: blur(62px);
+  pointer-events: none;
+  opacity: 0;
+  transform: scale(0.85);
+  transition: opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1), transform 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+  z-index: 1;
+}
+
+.orb-thinking-glow.active {
+  opacity: 1;
+  transform: scale(1.06);
+  animation: thinking-aura-pulse 3.4s infinite ease-in-out alternate;
+}
+
+@keyframes thinking-aura-pulse {
+  0% {
+    opacity: 0.72;
+    transform: scale(1.0);
+    filter: blur(44px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1.12);
+    filter: blur(58px);
+  }
 }
 
 /* Hologram Reticle Rings */
@@ -182,11 +218,11 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  cursor: grab;
+  cursor: default;
 }
 
 .orb-canvas-container:active {
-  cursor: grabbing;
+  cursor: default;
 }
 
 @keyframes holo-rotate-cw {

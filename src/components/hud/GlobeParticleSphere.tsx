@@ -1,4 +1,4 @@
-// Solar Particle Globe — Originkit (WebGL2)
+// Solar Particle Globe — Originkit (WebGL2) with Fluid Cognitive Vortex & Natural Acoustics
 
 import * as React from "react";
 import { useEffect, useRef } from "react";
@@ -25,6 +25,8 @@ export type CursorOptions = {
   reach?: number;
 };
 
+export type AssistantOrbState = 'idle' | 'listening' | 'thinking' | 'speaking' | 'error';
+
 export type GlobeParticleSphereProps = {
   background?: string;
   colors?: string[];
@@ -35,6 +37,7 @@ export type GlobeParticleSphereProps = {
   cursor?: CursorOptions;
   style?: React.CSSProperties;
   className?: string;
+  state?: AssistantOrbState;
 };
 
 type Live = {
@@ -46,6 +49,7 @@ type Live = {
   cursorSign: number;
   strength: number;
   reach: number;
+  state: AssistantOrbState;
 };
 
 const DEFAULTS = {
@@ -60,6 +64,7 @@ const DEFAULTS = {
     strength: 50,
     reach: 25,
   },
+  state: "idle" as AssistantOrbState,
 };
 
 function num(value: unknown, min: number, max: number, fallback: number): number {
@@ -154,10 +159,18 @@ uniform float uPush;
 uniform float uPull;
 uniform float uReach;
 
+// Interactive state acoustics & dynamic behaviors
+uniform float uVibration;
+uniform float uWaveAmp;
+uniform float uWaveFreq;
+uniform float uPulse;
+uniform float uTwinkleBoost;
+uniform float uTilt;
+uniform float uFlowStrength;
+
 out vec3 vCol;
 out float vA;
 
-const float TILT = ${SPIN_TILT.toFixed(4)};
 const float CAM = ${CAMERA_FACTOR.toFixed(4)};
 
 vec3 sampleGradient(float t) {
@@ -182,8 +195,15 @@ vec3 sampleGradient(float t) {
 void main() {
     vec3 n = aP.xyz;
 
-    float cs = cos(uSpin);
-    float sn = sin(uSpin);
+    // Fluid Vortex Swirl (for Thinking state):
+    // Equatorial & latitudinal differential rotation creates an organic, living cognitive vortex stream
+    // instead of a rigid solid sphere
+    float latitude = clamp((n.y * 0.5 + 0.5) * 3.14159, 0.0, 3.14159);
+    float equatorFlow = sin(latitude);
+    float vortexAngle = uSpin + (equatorFlow * uFlowStrength * sin(uClock * 2.2 + n.y * 1.8));
+
+    float cs = cos(vortexAngle);
+    float sn = sin(vortexAngle);
 
     n = vec3(
         cs * n.x + sn * n.z,
@@ -191,8 +211,8 @@ void main() {
         -sn * n.x + cs * n.z
     );
 
-    float ct = cos(TILT);
-    float st = sin(TILT);
+    float ct = cos(uTilt);
+    float st = sin(uTilt);
 
     n = vec3(
         n.x,
@@ -200,15 +220,28 @@ void main() {
         st * n.y + ct * n.z
     );
 
-    float r = uRadius * (0.97 + 0.03 * aP.w);
+    // 1. Smooth harmonic traveling wave ripples (for Speaking state):
+    float soundWave1 = sin(n.y * uWaveFreq - uClock * 4.2);
+    float soundWave2 = cos(n.x * (uWaveFreq * 0.75) + uClock * 3.2);
+    float harmonicWave = (soundWave1 + soundWave2) * 0.5 * uWaveAmp;
+
+    // 2. Sophisticated acoustic micro-vibrations:
+    float vib = sin(aP.w * 64.0 + uClock * 22.0) * cos(n.y * 8.0 + uClock * 15.0) * uVibration;
+
+    // 3. Radial deformation:
+    float baseDisplacement = 0.98 + 0.02 * aP.w;
+    float totalDisplacement = baseDisplacement + harmonicWave + vib;
+
+    float r = uRadius * uPulse * max(0.48, totalDisplacement);
     vec3 p = n * r;
 
     float facing = n.z * 0.5 + 0.5;
-    float twinkle = 0.75 + 0.25 * sin(uClock * 2.3 + aP.w * 61.0);
+    float twinkleSpeed = 2.0 + uTwinkleBoost * 2.5;
+    float twinkle = 0.78 + 0.22 * sin(uClock * twinkleSpeed + aP.w * 61.0);
     float t = clamp((1.0 - aP.y) * 0.5, 0.0, 1.0);
 
     vec3 col = sampleGradient(t);
-    float alpha = (0.16 + 0.34 * facing) * twinkle;
+    float alpha = (0.18 + 0.34 * facing + 0.16 * uTwinkleBoost) * twinkle;
 
     float F = CAM * max(uRes.x, uRes.y);
     vec3 world = vec3(uCenter, 0.0) + p;
@@ -231,7 +264,8 @@ void main() {
         1.0
     );
 
-    gl_PointSize = max(1.0, 2.0 * uDot * perspective * uDpr);
+    float dynamicDot = uDot * (1.0 + 0.22 * uWaveAmp + 0.18 * uTwinkleBoost);
+    gl_PointSize = max(1.0, 2.0 * dynamicDot * perspective * uDpr);
     vCol = col;
     vA = clamp(alpha, 0.0, 1.0);
 }
@@ -298,6 +332,7 @@ export function GlobeParticleSphere(props: GlobeParticleSphereProps) {
     cursor = DEFAULTS.cursor,
     style,
     className,
+    state = DEFAULTS.state,
   } = props;
 
   const rootRef = useRef<HTMLDivElement>(null);
@@ -312,6 +347,7 @@ export function GlobeParticleSphere(props: GlobeParticleSphereProps) {
     cursorSign: (cursor.mode ?? DEFAULTS.cursor.mode) === "attract" ? -1 : 1,
     strength: num(cursor.strength, 0, 100, DEFAULTS.cursor.strength),
     reach: num(cursor.reach, 1, 100, DEFAULTS.cursor.reach),
+    state: state ?? 'idle',
   };
 
   const config = useRef(live);
@@ -329,6 +365,34 @@ export function GlobeParticleSphere(props: GlobeParticleSphereProps) {
     });
 
     if (!gl) return;
+
+    // Web Audio Analyzer for live microphone responsiveness in listening state
+    let audioCtx: AudioContext | null = null;
+    let analyser: AnalyserNode | null = null;
+    let micStream: MediaStream | null = null;
+    let audioDataArray: Uint8Array | null = null;
+    let micVolumeSmoothed = 0;
+
+    const setupMicListener = async () => {
+      if (micStream || !navigator.mediaDevices?.getUserMedia) return;
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+        micStream = stream;
+        const AudioCtxClass = window.AudioContext || (window as any).webkitAudioContext;
+        if (!AudioCtxClass) return;
+        audioCtx = new AudioCtxClass();
+        const source = audioCtx.createMediaStreamSource(stream);
+        analyser = audioCtx.createAnalyser();
+        analyser.fftSize = 128;
+        analyser.smoothingTimeConstant = 0.75;
+        source.connect(analyser);
+        audioDataArray = new Uint8Array(analyser.frequencyBinCount);
+      } catch {
+        // Mic not granted or not present; gracefully falls back to quiet acoustic stillness
+      }
+    };
+
+    setupMicListener();
 
     const compileShader = (type: number, source: string) => {
       const shader = gl.createShader(type)!;
@@ -367,6 +431,13 @@ export function GlobeParticleSphere(props: GlobeParticleSphereProps) {
       push: getUniform("uPush"),
       pull: getUniform("uPull"),
       reach: getUniform("uReach"),
+      vibration: getUniform("uVibration"),
+      waveAmp: getUniform("uWaveAmp"),
+      waveFreq: getUniform("uWaveFreq"),
+      pulse: getUniform("uPulse"),
+      twinkleBoost: getUniform("uTwinkleBoost"),
+      tilt: getUniform("uTilt"),
+      flow: getUniform("uFlowStrength"),
     };
 
     const vao = gl.createVertexArray();
@@ -414,6 +485,15 @@ export function GlobeParticleSphere(props: GlobeParticleSphereProps) {
     let pointerY = 0;
     let pointerInside = false;
     let presence = 0;
+
+    // Smooth physical state parameters
+    let curVibration = 0.0;
+    let curWaveAmp = 0.012;
+    let curWaveFreq = 3.6;
+    let curPulse = 1.0;
+    let curTwinkleBoost = 0.0;
+    let curTilt = SPIN_TILT;
+    let curFlow = 0.0;
 
     const handlePointerMove = (event: PointerEvent) => {
       const rect = root.getBoundingClientRect();
@@ -464,14 +544,125 @@ export function GlobeParticleSphere(props: GlobeParticleSphereProps) {
       gl.uniform2f(u.center, 0, 0);
 
       const shortestSide = Math.min(width, height);
-      const maximumRadius = shortestSide * 0.38;
+      const maximumRadius = shortestSide * 0.465;
       const requestedRadius = (c.size / 100) * maximumRadius;
       const radius = Math.min(requestedRadius, maximumRadius);
 
       const animationSpeed = c.speed / 50;
-      rotation = (rotation + deltaTime * animationSpeed * SPIN_RAD_PER_SEC) % TAU;
       clock = (clock + deltaTime * animationSpeed) % 1000;
 
+      const orbState = c.state ?? 'idle';
+
+      // Sample live microphone volume if in listening mode
+      let liveVoiceVolume = 0;
+      if (orbState === 'listening' && analyser && audioDataArray) {
+        analyser.getByteFrequencyData(audioDataArray);
+        let sum = 0;
+        const bins = Math.min(24, audioDataArray.length);
+        for (let i = 1; i < bins; i++) {
+          sum += audioDataArray[i];
+        }
+        const rawVol = sum / (bins * 255);
+        // Noise threshold gate
+        const gated = rawVol < 0.035 ? 0 : (rawVol - 0.035) * 1.6;
+        liveVoiceVolume = Math.min(1.0, Math.max(0.0, gated));
+      }
+      micVolumeSmoothed += (liveVoiceVolume - micVolumeSmoothed) * (1 - Math.exp(-deltaTime * 18));
+
+      // 1. Sophisticated Directional Motion based on State:
+      if (orbState === 'thinking') {
+        // Thinking mode: Fluid cognitive vortex stream
+        // Smooth continuous rotation with harmonic acceleration waves
+        const cognitiveFlow = 1.15 + 0.35 * Math.sin(clock * 1.6);
+        rotation = (rotation + deltaTime * cognitiveFlow * SPIN_RAD_PER_SEC * 1.6) % TAU;
+      } else if (orbState === 'listening') {
+        // Listening mode: Gentle, serene drift — no chaotic movement
+        rotation = (rotation + deltaTime * 0.16 * SPIN_RAD_PER_SEC) % TAU;
+      } else if (orbState === 'speaking') {
+        // Speaking mode: Harmonic smooth rotation
+        const speakSpeed = (c.speed / 50) * 1.05;
+        rotation = (rotation + deltaTime * speakSpeed * SPIN_RAD_PER_SEC) % TAU;
+      } else if (orbState === 'error') {
+        // Alert mode: Moderate agitated spin
+        rotation = (rotation + deltaTime * 1.6 * SPIN_RAD_PER_SEC) % TAU;
+      } else {
+        // Idle mode: Peaceful celestial rotation
+        rotation = (rotation + deltaTime * animationSpeed * SPIN_RAD_PER_SEC) % TAU;
+      }
+
+      // 2. Sophisticated physical targets for each state (NO VOIDS, NO ARTIFICIAL HOLES):
+      let targetVibration = 0.001;
+      let targetWaveAmp = 0.012;
+      let targetWaveFreq = 3.6;
+      let targetPulse = 1.0;
+      let targetTwinkleBoost = 0.0;
+      let targetTilt = SPIN_TILT;
+      let targetFlow = 0.0;
+
+      if (orbState === 'listening') {
+        // Listening:
+        // When user is silent/static: Subtle, gentle movement with no harsh jitters or chaotic ups & downs
+        // When user speaks: Vibrates directly proportional to the magnitude of their voice!
+        const voiceMagnitude = micVolumeSmoothed;
+        targetVibration = 0.003 + voiceMagnitude * 0.038;
+        targetWaveAmp = 0.012 + voiceMagnitude * 0.026;
+        targetWaveFreq = 5.2;
+        targetPulse = 1.0 + voiceMagnitude * 0.04;
+        targetTwinkleBoost = 0.15 + voiceMagnitude * 0.25;
+        targetTilt = SPIN_TILT;
+        targetFlow = 0.0;
+      } else if (orbState === 'thinking') {
+        // Thinking mode: Fluid cognitive vortex stream
+        // Differential latitudinal swirl turns the particle sphere into a living stream of thoughts
+        targetVibration = 0.002;
+        targetWaveAmp = 0.016;                             // subtle wave
+        targetWaveFreq = 4.2;
+        targetPulse = 0.985 + 0.012 * Math.sin(clock * 2.2); // subtle breathing focus
+        targetTwinkleBoost = 0.55;                         // synaptic sparkles
+        targetTilt = SPIN_TILT + 0.05 * Math.sin(clock * 1.4);
+        targetFlow = 0.55;                                 // activates fluid vortex swirl!
+      } else if (orbState === 'speaking') {
+        // Speaking mode: Ethereal vocal sound wave resonance (like Siri / ChatGPT Voice)
+        // Rhythmic vocal syllable cadence swell + radiating liquid sound wave ripples
+        const cadence = (Math.sin(clock * 3.2) * 0.5 + 0.5) * (Math.cos(clock * 1.6) * 0.35 + 0.65);
+        targetVibration = 0.004 + cadence * 0.008;         // subtle vocal resonance
+        targetWaveAmp = 0.022 + cadence * 0.02;            // gentle sound wave ripples
+        targetWaveFreq = 4.5;
+        targetPulse = 0.985 + cadence * 0.035;             // gentle vocal syllable breath swell
+        targetTwinkleBoost = 0.32 + cadence * 0.25;        // vocal particle bloom
+        targetTilt = SPIN_TILT;
+        targetFlow = 0.15;                                 // gentle fluid motion
+      } else if (orbState === 'error') {
+        // Alert mode:
+        targetVibration = 0.02;
+        targetWaveAmp = 0.03;
+        targetWaveFreq = 7.5;
+        targetPulse = 0.98 + 0.02 * Math.sin(clock * 5.0);
+        targetTwinkleBoost = 0.4;
+        targetTilt = SPIN_TILT + 0.03 * Math.sin(clock * 3.0);
+        targetFlow = 0.0;
+      } else {
+        // Idle mode:
+        targetVibration = 0.001;
+        targetWaveAmp = 0.012;
+        targetWaveFreq = 3.6;
+        targetPulse = 1.0 + 0.014 * Math.sin(clock * 1.5); // calm ambient breathing
+        targetTwinkleBoost = 0.0;
+        targetTilt = SPIN_TILT;
+        targetFlow = 0.0;
+      }
+
+      // Smooth exponential easing for physical transitions
+      const lerpSpeed = 1 - Math.exp(-deltaTime * 10);
+      curVibration += (targetVibration - curVibration) * lerpSpeed;
+      curWaveAmp += (targetWaveAmp - curWaveAmp) * lerpSpeed;
+      curWaveFreq += (targetWaveFreq - curWaveFreq) * (1 - Math.exp(-deltaTime * 8));
+      curPulse += (targetPulse - curPulse) * (1 - Math.exp(-deltaTime * 12));
+      curTwinkleBoost += (targetTwinkleBoost - curTwinkleBoost) * lerpSpeed;
+      curTilt += (targetTilt - curTilt) * (1 - Math.exp(-deltaTime * 7));
+      curFlow += (targetFlow - curFlow) * (1 - Math.exp(-deltaTime * 6));
+
+      // Pass all uniform values to WebGL program
       gl.uniform2f(u.res, width, height);
       gl.uniform1f(u.dpr, dpr);
       gl.uniform1f(u.radius, radius);
@@ -479,9 +670,18 @@ export function GlobeParticleSphere(props: GlobeParticleSphereProps) {
       gl.uniform1f(u.clock, clock);
       gl.uniform1f(u.dot, (c.dotSize / 100) * DOT_REF_PX);
 
+      gl.uniform1f(u.vibration, curVibration);
+      gl.uniform1f(u.waveAmp, curWaveAmp);
+      gl.uniform1f(u.waveFreq, curWaveFreq);
+      gl.uniform1f(u.pulse, curPulse);
+      gl.uniform1f(u.twinkleBoost, curTwinkleBoost);
+      gl.uniform1f(u.tilt, curTilt);
+      gl.uniform1f(u.flow, curFlow);
+
       gl.uniform3fv(u.colors, c.palette.data);
       gl.uniform1i(u.colorCount, c.palette.count);
 
+      // ONLY actual real mouse hover interaction — NO fake autonomous pointer, NO voids/holes!
       const ease = 1 - Math.exp(-deltaTime * CURSOR_EASE);
       pointerX += (targetX - pointerX) * ease;
       pointerY += (targetY - pointerY) * ease;
@@ -509,6 +709,15 @@ export function GlobeParticleSphere(props: GlobeParticleSphereProps) {
       root.removeEventListener("pointermove", handlePointerMove as EventListener);
       root.removeEventListener("pointerdown", handlePointerMove as EventListener);
       root.removeEventListener("pointerleave", handlePointerLeave as EventListener);
+
+      if (micStream) {
+        micStream.getTracks().forEach((t) => t.stop());
+        micStream = null;
+      }
+      if (audioCtx && audioCtx.state !== 'closed') {
+        audioCtx.close().catch(() => {});
+        audioCtx = null;
+      }
     };
   }, []);
 

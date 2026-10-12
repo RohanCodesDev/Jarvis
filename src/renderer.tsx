@@ -1,6 +1,6 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import { App } from './app/App';
+import { JarvisHUD } from './ui';
 import './styles/globals.css';
 import './styles/hud.css';
 
@@ -13,6 +13,7 @@ if (!rootElement) {
 const root = ReactDOM.createRoot(rootElement);
 root.render(
   <React.StrictMode>
-    <App />
+    <JarvisHUD />
   </React.StrictMode>
 );
+

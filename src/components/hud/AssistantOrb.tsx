@@ -26,27 +26,27 @@ export const AssistantOrb: React.FC<AssistantOrbProps> = ({
           colors: ['#059669', '#10b981', '#34d399', '#67e8f9'],
           speed: 48,
           density: 85,
-          dotSize: 105,
-          size: 92,
+          dotSize: 110,
+          size: 98,
           cursor: { mode: 'attract', strength: 75, reach: 45 },
         };
       case 'thinking':
         return {
-          colors: ['#0077ff', '#00d4ff', '#818cf8', '#ffffff'],
-          speed: 85,
-          density: 95,
-          dotSize: 80,
-          size: 78,
-          cursor: { mode: 'repel', strength: 80, reach: 45 },
+          colors: ['#1d4ed8', '#3b82f6', '#60a5fa', '#a5f3fc', '#ffffff'],
+          speed: 60,
+          density: 92,
+          dotSize: 100,
+          size: 96,
+          cursor: { mode: 'repel', strength: 50, reach: 35 },
         };
       case 'speaking':
         return {
-          colors: ['#0284c7', '#38bdf8', '#7dd3fc', '#ffffff'],
+          colors: ['#0284c7', '#38bdf8', '#7dd3fc', '#bae6fd', '#ffffff'],
           speed: 52,
-          density: 78,
-          dotSize: 125,
-          size: 88,
-          cursor: { mode: 'repel', strength: 65, reach: 35 },
+          density: 82,
+          dotSize: 120,
+          size: 98,
+          cursor: { mode: 'repel', strength: 50, reach: 35 },
         };
       case 'error':
         return {
@@ -54,7 +54,7 @@ export const AssistantOrb: React.FC<AssistantOrbProps> = ({
           speed: 88,
           density: 80,
           dotSize: 110,
-          size: 85,
+          size: 97,
           cursor: { mode: 'repel', strength: 90, reach: 50 },
         };
       case 'idle':
@@ -63,8 +63,8 @@ export const AssistantOrb: React.FC<AssistantOrbProps> = ({
           colors: ['#0055ff', '#00d4ff', '#a5f3fc'],
           speed: 32,
           density: 70,
-          dotSize: 85,
-          size: 86,
+          dotSize: 100,
+          size: 97,
           cursor: { mode: 'repel', strength: 50, reach: 30 },
         };
     }
@@ -74,11 +74,12 @@ export const AssistantOrb: React.FC<AssistantOrbProps> = ({
 
   return (
     <div className="hero-orb-viewport" onClick={state !== 'idle' ? onInterrupt : undefined}>
-      <div
-        className="orb-canvas-container"
-        title="Interactive Solar Particle Globe (Hover/Interact with Cursor)"
-      >
+      {/* Ethereal Thinking Radial Aura directly at the back of the orb */}
+      <div className={`orb-thinking-glow ${state === 'thinking' ? 'active' : ''}`} />
+
+      <div className="orb-canvas-container">
         <GlobeParticleSphere
+          state={state}
           colors={globe.colors}
           speed={globe.speed}
           density={globe.density}
