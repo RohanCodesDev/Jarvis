@@ -31,23 +31,62 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [keyStatusMsg, setKeyStatusMsg] = useState<string | null>(null);
   const [savingKey, setSavingKey] = useState(false);
 
+  const [modelsList, setModelsList] = useState<
+    Array<{ id: string; name: string; isFree?: boolean }>
+  >([
+    {
+      id: 'meta-llama/llama-3.3-70b-instruct:free',
+      name: 'Meta Llama 3.3 70B (Free)',
+      isFree: true,
+    },
+    {
+      id: 'google/gemini-2.0-flash-lite-preview-02-05:free',
+      name: 'Google Gemini 2.0 Flash Lite (Free)',
+      isFree: true,
+    },
+    { id: 'deepseek/deepseek-chat', name: 'DeepSeek V3' },
+    {
+      id: 'anthropic/claude-3.5-sonnet',
+      name: 'Anthropic Claude 3.5 Sonnet',
+    },
+    { id: 'openai/gpt-4o-mini', name: 'OpenAI GPT-4o Mini' },
+  ]);
+
   useEffect(() => {
     setFormData(settings);
+    if (window.jarvisDesktop?.getAvailableModels) {
+      window.jarvisDesktop
+        .getAvailableModels()
+        .then((m) => {
+          if (m && m.length > 0) setModelsList(m);
+        })
+        .catch(() => {});
+    }
   }, [settings]);
 
   if (!isOpen) return null;
 
   const handleSaveApiKey = async () => {
-    if (!keyInput.trim()) return;
+    const trimmed = keyInput.trim();
+    if (!trimmed) return;
     setSavingKey(true);
-    setKeyStatusMsg(null);
+    setKeyStatusMsg('Verifying key with OpenRouter API...');
     try {
+      if (window.jarvisDesktop?.validateApiKey) {
+        const validation = await window.jarvisDesktop.validateApiKey(trimmed);
+        if (!validation.valid) {
+          setKeyStatusMsg(
+            `Verification warning: ${validation.error || 'Key rejected by OpenRouter'}`,
+          );
+        }
+      }
+
       if (window.jarvisDesktop?.setApiKey) {
-        const res = await window.jarvisDesktop.setApiKey(keyInput.trim());
+        const res = await window.jarvisDesktop.setApiKey(trimmed);
         if (res.success) {
           setFormData((prev) => ({ ...prev, hasApiKey: true }));
           setKeyInput('');
-          setKeyStatusMsg('Key encrypted and stored via OS safeStorage.');
+          setKeyStatusMsg('Key verified and encrypted in OS safeStorage.');
         } else {
           setKeyStatusMsg(`Encryption failed: ${res.error || 'Unknown error'}`);
         }
@@ -140,16 +179,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   setFormData({ ...formData, openRouterModel: e.target.value })
                 }
               >
-                <option value="anthropic/claude-3.5-sonnet">
-                  Anthropic Claude 3.5 Sonnet
-                </option>
-                <option value="openai/gpt-4o">OpenAI GPT-4o</option>
-                <option value="meta-llama/llama-3.3-70b-instruct">
-                  Meta Llama 3.3 70B Instruct
-                </option>
-                <option value="google/gemini-2.0-flash">
-                  Google Gemini 2.0 Flash
-                </option>
+                {modelsList.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name} {m.isFree ? '(Free Tier)' : ''}
+                  </option>
+                ))}
               </select>
             </div>
           ) : (

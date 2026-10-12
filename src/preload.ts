@@ -23,6 +23,39 @@ const desktopAPI: DesktopBridgeAPI = {
   saveSettings: async (settings) => {
     return ipcRenderer.invoke('desktop:saveSettings', settings);
   },
+  validateApiKey: async (key: string) => {
+    return ipcRenderer.invoke('desktop:validateApiKey', key);
+  },
+  getAvailableModels: async () => {
+    return ipcRenderer.invoke('desktop:getAvailableModels');
+  },
+  sendChatMessage: (params, onChunk) => {
+    const handler = (
+      _event: Electron.IpcRendererEvent,
+      data: import('./types/hud').ChatStreamChunkEvent,
+    ) => {
+      if (data && data.streamId === params.streamId) {
+        onChunk(data);
+      }
+    };
+
+    ipcRenderer.on('desktop:chatChunk', handler);
+    ipcRenderer.invoke('desktop:sendChatMessage', params).catch((err) => {
+      onChunk({
+        streamId: params.streamId,
+        error: String(err),
+        done: true,
+      });
+    });
+
+    return () => {
+      ipcRenderer.removeListener('desktop:chatChunk', handler);
+      ipcRenderer.invoke('desktop:cancelChatMessage', params.streamId);
+    };
+  },
+  cancelChatMessage: async (streamId: string) => {
+    return ipcRenderer.invoke('desktop:cancelChatMessage', streamId);
+  },
 };
 
 contextBridge.exposeInMainWorld('jarvisDesktop', desktopAPI);

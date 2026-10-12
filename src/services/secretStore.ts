@@ -3,11 +3,15 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 function getSecretsPath(): string {
-  return path.join(app.getPath('userData'), 'jarvis-secrets.bin');
+  const userData = app?.getPath ? app.getPath('userData') : process.cwd();
+  return path.join(userData, 'jarvis-secrets.bin');
 }
 
 export function isSecretStorageAvailable(): boolean {
-  return safeStorage.isEncryptionAvailable();
+  return (
+    typeof safeStorage?.isEncryptionAvailable === 'function' &&
+    safeStorage.isEncryptionAvailable()
+  );
 }
 
 /**

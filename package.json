@@ -44,10 +44,12 @@
     "vitest": "^5.0.4"
   },
   "dependencies": {
+    "@openrouter/sdk": "^1.4.25",
     "electron-squirrel-startup": "^1.0.1",
     "jarvis-ai-web-animation": "^0.1.2",
     "lucide-react": "^1.55.0",
     "react": "^19.3.0",
-    "react-dom": "^19.3.0"
+    "react-dom": "^19.3.0",
+    "zod": "^4.6.7"
   }
 }

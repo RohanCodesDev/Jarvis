@@ -58,6 +58,17 @@ export interface JarvisSettings {
   theme?: HudTheme;
 }
 
+export interface ChatStreamChunkEvent {
+  streamId: string;
+  chunk?: string;
+  done?: boolean;
+  error?: string;
+  fullResponse?: string;
+  metadata?: {
+    model?: string;
+  };
+}
+
 export interface DesktopBridgeAPI {
   getSystemInfo: () => Promise<{
     platform: string;
@@ -69,10 +80,27 @@ export interface DesktopBridgeAPI {
   hasApiKey: () => Promise<boolean>;
   setApiKey: (key: string) => Promise<{ success: boolean; error?: string }>;
   deleteApiKey: () => Promise<{ success: boolean }>;
+  validateApiKey: (key: string) => Promise<{ valid: boolean; error?: string }>;
   getSettings: () => Promise<JarvisSettings>;
   saveSettings: (
     settings: Partial<JarvisSettings>,
   ) => Promise<{ success: boolean }>;
+  getAvailableModels: () => Promise<
+    Array<{ id: string; name: string; isFree?: boolean }>
+  >;
+  sendChatMessage: (
+    params: {
+      streamId: string;
+      message: string;
+      history?: Array<{
+        role: 'user' | 'assistant' | 'system';
+        content: string;
+      }>;
+      model?: string;
+    },
+    onChunk: (event: ChatStreamChunkEvent) => void,
+  ) => () => void;
+  cancelChatMessage: (streamId: string) => Promise<void>;
 }
 
 declare global {

@@ -93,6 +93,7 @@ export const JarvisHUD: React.FC = () => {
   ]);
 
   const speechTimeoutRef = useRef<number | null>(null);
+  const streamCleanupRef = useRef<(() => void) | null>(null);
 
   const addActivity = useCallback(
     (
@@ -181,6 +182,10 @@ export const JarvisHUD: React.FC = () => {
   }, []);
 
   const handleHalt = useCallback(() => {
+    if (streamCleanupRef.current) {
+      streamCleanupRef.current();
+      streamCleanupRef.current = null;
+    }
     if (speechTimeoutRef.current) {
       clearTimeout(speechTimeoutRef.current);
       speechTimeoutRef.current = null;
@@ -243,6 +248,11 @@ export const JarvisHUD: React.FC = () => {
   const handleSendMessage = (text: string) => {
     if (!text.trim() || assistantState === 'thinking') return;
 
+    if (streamCleanupRef.current) {
+      streamCleanupRef.current();
+      streamCleanupRef.current = null;
+    }
+
     const now = new Date().toLocaleTimeString('en-US', { hour12: false });
     const userMsg: ChatMessage = {
       id: 'msg-u-' + Date.now(),
@@ -252,67 +262,129 @@ export const JarvisHUD: React.FC = () => {
       status: 'delivered',
     };
 
-    setMessages((prev) => [...prev, userMsg]);
+    const jarvisMsgId = 'msg-j-' + Date.now();
+    const pendingJarvisMsg: ChatMessage = {
+      id: jarvisMsgId,
+      sender: 'jarvis',
+      text: '',
+      timestamp: now,
+      status: 'sending',
+      metadata: {
+        modelUsed: settings.openRouterModel,
+      },
+    };
+
+    setMessages((prev) => [...prev, userMsg, pendingJarvisMsg]);
     setAssistantState('thinking');
     addActivity(
       'info',
       'ai',
-      `Directive received: "${text.length > 25 ? text.substring(0, 25) + '...' : text}"`,
+      `Directive dispatched: "${text.length > 28 ? text.substring(0, 28) + '...' : text}"`,
     );
 
     const startTime = performance.now();
-    setTimeout(() => {
-      const elapsed = Math.round(performance.now() - startTime);
-      let responseText = `Directive registered: "${text}". All Mark-85 HUD channels operating smoothly.`;
 
-      const lower = text.toLowerCase();
-      if (lower.includes('diagnostic') || lower.includes('telemetry')) {
-        responseText = `Tactical Diagnostics: Host platform is Windows 11 x64, Solar Particle Globe operating at 60 FPS, CPU load ${telemetry.cpuUsage}%, renderer memory ~${telemetry.memoryUsageMb}MB. All defensive protocols nominal.`;
-      } else if (lower.includes('memory') || lower.includes('bank')) {
-        responseText = `Accessing memory banks: ${memories.length} durable records indexed in local store. Sector integrity verified.`;
-      } else if (lower.includes('audio') || lower.includes('harmonic')) {
-        responseText =
-          'Acoustic visualizer synchronized. Harmonic carrier frequencies transmitting at 1420.4 MHz.';
-      } else if (lower.includes('alert') || lower.includes('defcon')) {
-        responseText =
-          'Defcon alert simulated. Quantum core shifting to amber alert matrix.';
-        setAssistantState('error');
-        addActivity(
-          'warn',
-          'security',
-          'Simulated Defcon-1 alert protocol activated.',
-        );
-        return;
-      }
+    if (window.jarvisDesktop?.sendChatMessage) {
+      const streamId =
+        'stream-' +
+        Date.now() +
+        '-' +
+        Math.random().toString(36).substring(2, 6);
+      const history = messages.slice(-8).map((m) => ({
+        role: (m.sender === 'user' ? 'user' : 'assistant') as
+          | 'user'
+          | 'assistant',
+        content: m.text,
+      }));
 
-      const jarvisMsg: ChatMessage = {
-        id: 'msg-j-' + Date.now(),
-        sender: 'jarvis',
-        text: responseText,
-        timestamp: new Date().toLocaleTimeString('en-US', { hour12: false }),
-        metadata: {
-          modelUsed: 'JARVIS Core',
-          durationMs: elapsed,
+      let accumulated = '';
+      const cleanup = window.jarvisDesktop.sendChatMessage(
+        {
+          streamId,
+          message: text,
+          history,
+          model: settings.openRouterModel,
         },
-      };
+        (event) => {
+          if (event.chunk) {
+            accumulated += event.chunk;
+            setAssistantState('speaking');
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === jarvisMsgId
+                  ? { ...m, text: accumulated, status: 'sending' }
+                  : m,
+              ),
+            );
+          }
 
-      setMessages((prev) => [...prev, jarvisMsg]);
-      setAssistantState('speaking');
-      addActivity(
-        'success',
-        'ai',
-        `Synthesizing vocal response (${elapsed}ms).`,
+          if (event.done) {
+            streamCleanupRef.current = null;
+            const elapsed = Math.round(performance.now() - startTime);
+            const finalText = event.fullResponse || accumulated;
+
+            if (event.error) {
+              setAssistantState('error');
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === jarvisMsgId
+                    ? {
+                        ...m,
+                        text: `[Error: ${event.error}]`,
+                        status: 'error',
+                        metadata: { durationMs: elapsed },
+                      }
+                    : m,
+                ),
+              );
+              addActivity('error', 'ai', event.error);
+              setTimeout(() => setAssistantState('idle'), 3500);
+            } else {
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === jarvisMsgId
+                    ? {
+                        ...m,
+                        text: finalText,
+                        status: 'delivered',
+                        metadata: {
+                          modelUsed:
+                            event.metadata?.model || settings.openRouterModel,
+                          durationMs: elapsed,
+                        },
+                      }
+                    : m,
+                ),
+              );
+              addActivity('success', 'ai', `Stream concluded (${elapsed}ms).`);
+              speakText(finalText, () => {
+                setAssistantState('idle');
+              });
+            }
+          }
+        },
       );
-
-      speakText(responseText, () => {
-        setAssistantState('idle');
-        addActivity(
-          'info',
-          'system',
-          'Voice playback complete. Core standing by.',
+      streamCleanupRef.current = cleanup;
+    } else {
+      setTimeout(() => {
+        const elapsed = Math.round(performance.now() - startTime);
+        const reply = `Directive registered: "${text}". All Mark-85 HUD channels operating smoothly.`;
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === jarvisMsgId
+              ? {
+                  ...m,
+                  text: reply,
+                  status: 'delivered',
+                  metadata: { durationMs: elapsed },
+                }
+              : m,
+          ),
         );
-      });
-    }, 1100);
+        setAssistantState('speaking');
+        speakText(reply, () => setAssistantState('idle'));
+      }, 800);
+    }
   };
 
   const handleVoiceInputTrigger = () => {

@@ -22,6 +22,7 @@ import {
   isSecretStorageAvailable,
 } from './services/secretStore';
 import { loadSettings, saveSettings } from './services/settingsStore';
+import { aiManager } from './services/ai/aiManager';
 
 function setupIpcHandlers() {
   ipcMain.handle('desktop:getSystemInfo', async (event) => {
@@ -96,6 +97,102 @@ function setupIpcHandlers() {
     }
     const success = saveSettings(payload as Record<string, unknown>);
     return { success };
+  });
+
+  ipcMain.handle('desktop:validateApiKey', async (event, key: unknown) => {
+    if (!isValidSender(event)) {
+      throw new Error('Unauthorized IPC sender');
+    }
+    if (typeof key !== 'string' || !key.trim()) {
+      return { valid: false, error: 'Empty key provided' };
+    }
+    return aiManager.validateOpenRouterKey(key);
+  });
+
+  ipcMain.handle('desktop:getAvailableModels', async (event) => {
+    if (!isValidSender(event)) {
+      throw new Error('Unauthorized IPC sender');
+    }
+    return aiManager.getModels();
+  });
+
+  ipcMain.handle(
+    'desktop:cancelChatMessage',
+    async (event, streamId: unknown) => {
+      if (!isValidSender(event)) {
+        throw new Error('Unauthorized IPC sender');
+      }
+      if (typeof streamId === 'string') {
+        aiManager.cancelStream(streamId);
+      }
+      return { success: true };
+    },
+  );
+
+  ipcMain.handle('desktop:sendChatMessage', async (event, payload: unknown) => {
+    if (!isValidSender(event)) {
+      throw new Error('Unauthorized IPC sender');
+    }
+    if (typeof payload !== 'object' || payload === null) {
+      throw new Error('Invalid chat message payload');
+    }
+    const data = payload as {
+      streamId: string;
+      message: string;
+      history?: Array<{
+        role: 'user' | 'assistant' | 'system';
+        content: string;
+      }>;
+      model?: string;
+    };
+
+    if (!data.streamId || !data.message) {
+      throw new Error('streamId and message are required');
+    }
+
+    const messages = (data.history || []).map((m) => ({
+      role: m.role,
+      content: m.content,
+    }));
+    messages.push({ role: 'user' as const, content: data.message });
+
+    aiManager.streamChat(
+      data.streamId,
+      {
+        messages,
+        model: data.model,
+      },
+      (chunk) => {
+        if (!event.sender.isDestroyed()) {
+          event.sender.send('desktop:chatChunk', {
+            streamId: data.streamId,
+            chunk,
+            done: false,
+          });
+        }
+      },
+      (fullResponse, metadata) => {
+        if (!event.sender.isDestroyed()) {
+          event.sender.send('desktop:chatChunk', {
+            streamId: data.streamId,
+            fullResponse,
+            done: true,
+            metadata,
+          });
+        }
+      },
+      (error) => {
+        if (!event.sender.isDestroyed()) {
+          event.sender.send('desktop:chatChunk', {
+            streamId: data.streamId,
+            error,
+            done: true,
+          });
+        }
+      },
+    );
+
+    return { started: true };
   });
 }
 

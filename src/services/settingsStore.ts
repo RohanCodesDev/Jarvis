@@ -4,7 +4,8 @@ import path from 'node:path';
 import type { JarvisSettings } from '../types/hud';
 
 function getSettingsPath(): string {
-  return path.join(app.getPath('userData'), 'jarvis-settings.json');
+  const userData = app?.getPath ? app.getPath('userData') : process.cwd();
+  return path.join(userData, 'jarvis-settings.json');
 }
 
 export const DEFAULT_SETTINGS: JarvisSettings = {
