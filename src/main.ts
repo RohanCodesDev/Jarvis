@@ -214,6 +214,20 @@ const createWindow = () => {
     },
   });
 
+  mainWindow.webContents.session.setPermissionRequestHandler(
+    (webContents, permission, callback) => {
+      if (
+        permission === 'media' &&
+        mainWindow &&
+        webContents.id === mainWindow.webContents.id
+      ) {
+        callback(true);
+        return;
+      }
+      callback(false);
+    },
+  );
+
   mainWindow.show();
   mainWindow.focus();
 

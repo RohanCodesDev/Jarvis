@@ -19,6 +19,7 @@ import { TacticalTelemetryStream } from './hud/TacticalTelemetryStream';
 import { CommsDrawer } from './drawer/CommsDrawer';
 import { SettingsModal } from './modals/SettingsModal';
 import { MemoryViewer } from './modals/MemoryViewer';
+import { VoiceCoordinator } from '../services/voice/voiceCoordinator';
 
 export const JarvisHUD: React.FC = () => {
   const [assistantState, setAssistantState] = useState<AssistantState>('idle');
@@ -94,6 +95,7 @@ export const JarvisHUD: React.FC = () => {
 
   const speechTimeoutRef = useRef<number | null>(null);
   const streamCleanupRef = useRef<(() => void) | null>(null);
+  const voiceCoordinatorRef = useRef<VoiceCoordinator>(new VoiceCoordinator());
 
   const addActivity = useCallback(
     (
@@ -190,9 +192,7 @@ export const JarvisHUD: React.FC = () => {
       clearTimeout(speechTimeoutRef.current);
       speechTimeoutRef.current = null;
     }
-    if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
-    }
+    voiceCoordinatorRef.current.halt();
     setAssistantState('idle');
     addActivity('warn', 'ai', 'Manual directive override: Subsystem halted.');
   }, [addActivity]);
@@ -219,30 +219,37 @@ export const JarvisHUD: React.FC = () => {
 
   const speakText = useCallback(
     (text: string, onEnd: () => void) => {
-      if (
-        !telemetry.speakerEnabled ||
-        !settings.speechEnabled ||
-        !('speechSynthesis' in window)
-      ) {
-        speechTimeoutRef.current = window.setTimeout(onEnd, 1400);
+      if (!telemetry.speakerEnabled || !settings.speechEnabled) {
+        speechTimeoutRef.current = window.setTimeout(onEnd, 1200);
         return;
       }
 
-      try {
-        window.speechSynthesis.cancel();
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.rate = 1.05;
-        utterance.pitch = 0.95;
-
-        utterance.onend = () => onEnd();
-        utterance.onerror = () => onEnd();
-
-        window.speechSynthesis.speak(utterance);
-      } catch {
-        onEnd();
-      }
+      voiceCoordinatorRef.current.speak(
+        text,
+        {
+          onStateChange: (st) => {
+            if (st === 'speaking') setAssistantState('speaking');
+            else if (st === 'idle') setAssistantState('idle');
+            else if (st === 'error') setAssistantState('error');
+          },
+          onError: (err) => {
+            addActivity('warn', 'voice', err);
+          },
+        },
+        {
+          voiceGender: settings.voiceGender,
+          rate: 1.05,
+          pitch: 0.96,
+        },
+        onEnd,
+      );
     },
-    [telemetry.speakerEnabled, settings.speechEnabled],
+    [
+      telemetry.speakerEnabled,
+      settings.speechEnabled,
+      settings.voiceGender,
+      addActivity,
+    ],
   );
 
   const handleSendMessage = (text: string) => {
@@ -389,27 +396,70 @@ export const JarvisHUD: React.FC = () => {
 
   const handleVoiceInputTrigger = () => {
     if (assistantState === 'listening') {
+      voiceCoordinatorRef.current.stopListening();
       setAssistantState('idle');
       addActivity('info', 'voice', 'Microphone capture closed.');
       return;
     }
 
-    setAssistantState('listening');
+    if (!telemetry.micEnabled) {
+      addActivity(
+        'warn',
+        'voice',
+        'Microphone is muted in tactical telemetry.',
+      );
+      return;
+    }
+
+    if (!voiceCoordinatorRef.current.isRecognitionSupported()) {
+      addActivity(
+        'warn',
+        'voice',
+        'Web Speech recognition unavailable in host runtime.',
+      );
+      return;
+    }
+
     addActivity(
       'info',
       'voice',
       'Audio transcriber engaged. Listening for vocal directive...',
     );
 
-    setTimeout(() => {
-      setAssistantState('idle');
-      handleSendMessage('Run complete desktop telemetry diagnostics');
-    }, 2500);
+    voiceCoordinatorRef.current.startListening({
+      onStateChange: (st) => {
+        if (st === 'listening') setAssistantState('listening');
+        else if (st === 'processing') setAssistantState('thinking');
+        else if (st === 'idle') setAssistantState('idle');
+        else if (st === 'error') setAssistantState('error');
+      },
+      onInterimTranscript: (interim) => {
+        if (interim.length > 3) {
+          addActivity('info', 'voice', `Transcribing: "${interim}"`);
+        }
+      },
+      onFinalTranscript: (finalText) => {
+        addActivity(
+          'success',
+          'voice',
+          `Vocal directive transcribed: "${finalText}"`,
+        );
+        handleSendMessage(finalText);
+      },
+      onError: (err) => {
+        addActivity('warn', 'voice', err);
+        setAssistantState('idle');
+      },
+    });
   };
 
   const handleToggleMic = () => {
     setTelemetry((prev) => {
       const next = !prev.micEnabled;
+      if (!next && assistantState === 'listening') {
+        voiceCoordinatorRef.current.stopListening();
+        setAssistantState('idle');
+      }
       addActivity('info', 'voice', `Microphone ${next ? 'engaged' : 'muted'}.`);
       return { ...prev, micEnabled: next };
     });
@@ -418,8 +468,8 @@ export const JarvisHUD: React.FC = () => {
   const handleToggleSpeaker = () => {
     setTelemetry((prev) => {
       const next = !prev.speakerEnabled;
-      if (!next && 'speechSynthesis' in window) {
-        window.speechSynthesis.cancel();
+      if (!next) {
+        voiceCoordinatorRef.current.halt();
       }
       addActivity(
         'info',
