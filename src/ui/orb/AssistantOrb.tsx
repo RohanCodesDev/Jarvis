@@ -1,17 +1,19 @@
 import React from 'react';
-import type { AssistantState } from '../../types/hud';
+import type { AssistantState, HudTheme } from '../../types/hud';
 import { GlobeParticleSphere, type CursorOptions } from './GlobeParticleSphere';
 
 interface AssistantOrbProps {
   state: AssistantState;
+  theme?: HudTheme;
   onInterrupt?: () => void;
 }
 
 export const AssistantOrb: React.FC<AssistantOrbProps> = ({
   state,
+  theme = 'cyan',
   onInterrupt,
 }) => {
-  // Compute dynamic Globe Particle parameters based on state
+  // Compute dynamic Globe Particle parameters based on state and theme
   const getGlobeParameters = (): {
     colors: string[];
     speed: number;
@@ -58,15 +60,23 @@ export const AssistantOrb: React.FC<AssistantOrbProps> = ({
           cursor: { mode: 'repel', strength: 90, reach: 50 },
         };
       case 'idle':
-      default:
+      default: {
+        const themeColors: Record<HudTheme, string[]> = {
+          cyan: ['#0055ff', '#00d4ff', '#a5f3fc'],
+          gold: ['#b45309', '#f59e0b', '#fde68a'],
+          matrix: ['#047857', '#10b981', '#6ee7b7'],
+          crimson: ['#991b1b', '#ef4444', '#fca5a5'],
+          violet: ['#6b21a8', '#a855f7', '#d8b4fe'],
+        };
         return {
-          colors: ['#0055ff', '#00d4ff', '#a5f3fc'],
+          colors: themeColors[theme] || themeColors.cyan,
           speed: 32,
           density: 70,
           dotSize: 100,
           size: 97,
           cursor: { mode: 'repel', strength: 50, reach: 30 },
         };
+      }
     }
   };
 

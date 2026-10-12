@@ -37,10 +37,7 @@ export const TacticalDialogueStream: React.FC<TacticalDialogueStreamProps> = ({
         : null;
 
   return (
-    <div
-      className="hacker-dialogue-flank"
-      aria-label="Messages Stream"
-    >
+    <div className="hacker-dialogue-flank" aria-label="Messages Stream">
       {/* 1. Clean Header */}
       <div className="hacker-stream-header">
         <span className="hacker-tag">// MESSAGES</span>
@@ -97,4 +94,3 @@ export const TacticalDialogueStream: React.FC<TacticalDialogueStreamProps> = ({
 };
 
 export default TacticalDialogueStream;
-

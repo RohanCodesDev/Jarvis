@@ -44,6 +44,8 @@ export interface UserMemoryItem {
   createdAt: string;
 }
 
+export type HudTheme = 'cyan' | 'gold' | 'matrix' | 'crimson' | 'violet';
+
 export interface JarvisSettings {
   cloudProvider: 'openrouter' | 'ollama';
   openRouterModel: string;
@@ -53,6 +55,7 @@ export interface JarvisSettings {
   voiceGender: 'male' | 'female';
   soundEffects: boolean;
   compactMode: boolean;
+  theme?: HudTheme;
 }
 
 export interface DesktopBridgeAPI {

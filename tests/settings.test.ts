@@ -20,4 +20,8 @@ describe('Settings Defaults & Validation', () => {
   it('starts with mock mode (hasApiKey false)', () => {
     expect(DEFAULT_SETTINGS.hasApiKey).toBe(false);
   });
+
+  it('defaults to cyan theme', () => {
+    expect(DEFAULT_SETTINGS.theme).toBe('cyan');
+  });
 });

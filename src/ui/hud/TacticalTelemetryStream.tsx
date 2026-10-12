@@ -52,10 +52,7 @@ export const TacticalTelemetryStream: React.FC<
     ']';
 
   return (
-    <div
-      className="hacker-telemetry-flank"
-      aria-label="System Telemetry"
-    >
+    <div className="hacker-telemetry-flank" aria-label="System Telemetry">
       {/* 1. Clean Header */}
       <div className="hacker-stream-header right-align">
         <span className="hacker-tag">// STATUS</span>
@@ -75,9 +72,7 @@ export const TacticalTelemetryStream: React.FC<
         <div className="hacker-stat-row">
           <span className="stat-label">Memory</span>
           <span className="stat-divider">:</span>
-          <span className="stat-val">
-            {telemetry.memoryUsageMb} MB
-          </span>
+          <span className="stat-val">{telemetry.memoryUsageMb} MB</span>
         </div>
 
         <div className="hacker-stat-row">
@@ -97,9 +92,7 @@ export const TacticalTelemetryStream: React.FC<
         <div className="hacker-stat-row">
           <span className="stat-label">Ping</span>
           <span className="stat-divider">:</span>
-          <span className="stat-val">
-            {telemetry.latencyMs} ms
-          </span>
+          <span className="stat-val">{telemetry.latencyMs} ms</span>
         </div>
       </div>
 
@@ -143,4 +136,3 @@ export const TacticalTelemetryStream: React.FC<
 };
 
 export default TacticalTelemetryStream;
-

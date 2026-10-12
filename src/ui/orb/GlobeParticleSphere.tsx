@@ -179,6 +179,8 @@ uniform float uPulse;
 uniform float uTwinkleBoost;
 uniform float uTilt;
 uniform float uFlowStrength;
+uniform float uShockwaveRadius;
+uniform float uShockwaveAmp;
 
 out vec3 vCol;
 out float vA;
@@ -239,9 +241,13 @@ void main() {
     // 2. Sophisticated acoustic micro-vibrations:
     float vib = sin(aP.w * 64.0 + uClock * 22.0) * cos(n.y * 8.0 + uClock * 15.0) * uVibration;
 
-    // 3. Radial deformation:
+    // 3. Interactive Shockwave Pulse:
+    float shockDist = abs(length(n.xy) - uShockwaveRadius);
+    float shockRipple = sin(clamp(1.0 - shockDist * 4.5, 0.0, 1.0) * 3.14159) * uShockwaveAmp;
+
+    // 4. Radial deformation:
     float baseDisplacement = 0.98 + 0.02 * aP.w;
-    float totalDisplacement = baseDisplacement + harmonicWave + vib;
+    float totalDisplacement = baseDisplacement + harmonicWave + vib + shockRipple;
 
     float r = uRadius * uPulse * max(0.48, totalDisplacement);
     vec3 p = n * r;
@@ -460,6 +466,8 @@ export function GlobeParticleSphere(props: GlobeParticleSphereProps) {
       twinkleBoost: getUniform('uTwinkleBoost'),
       tilt: getUniform('uTilt'),
       flow: getUniform('uFlowStrength'),
+      shockwaveRadius: getUniform('uShockwaveRadius'),
+      shockwaveAmp: getUniform('uShockwaveAmp'),
     };
 
     const vao = gl.createVertexArray();
@@ -516,6 +524,39 @@ export function GlobeParticleSphere(props: GlobeParticleSphereProps) {
     let curTwinkleBoost = 0.0;
     let curTilt = SPIN_TILT;
     let curFlow = 0.0;
+    let curShockwaveRadius = 2.0;
+    let curShockwaveAmp = 0.0;
+
+    const playShockwaveSound = () => {
+      try {
+        const AudioCtxClass =
+          window.AudioContext ||
+          (window as unknown as { webkitAudioContext?: typeof AudioContext })
+            .webkitAudioContext;
+        if (!AudioCtxClass) return;
+        const ctx = new AudioCtxClass();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(880, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(320, ctx.currentTime + 0.14);
+        gain.gain.setValueAtTime(0.04, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.14);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.14);
+        setTimeout(() => ctx.close().catch(() => {}), 200);
+      } catch {}
+    };
+
+    const handleClick = () => {
+      curShockwaveRadius = 0.05;
+      curShockwaveAmp = 0.28;
+      playShockwaveSound();
+    };
+
+    root.addEventListener('click', handleClick);
 
     const handlePointerMove = (event: PointerEvent) => {
       const rect = root.getBoundingClientRect();
@@ -707,6 +748,15 @@ export function GlobeParticleSphere(props: GlobeParticleSphereProps) {
       gl.uniform1f(u.tilt, curTilt);
       gl.uniform1f(u.flow, curFlow);
 
+      if (curShockwaveAmp > 0.005) {
+        curShockwaveRadius += deltaTime * 2.2;
+        curShockwaveAmp *= Math.exp(-deltaTime * 4.5);
+      } else {
+        curShockwaveAmp = 0.0;
+      }
+      gl.uniform1f(u.shockwaveRadius, curShockwaveRadius);
+      gl.uniform1f(u.shockwaveAmp, curShockwaveAmp);
+
       gl.uniform3fv(u.colors, c.palette.data);
       gl.uniform1i(u.colorCount, c.palette.count);
 
@@ -748,6 +798,7 @@ export function GlobeParticleSphere(props: GlobeParticleSphereProps) {
       cancelAnimationFrame(animationFrame);
       resizeObserver.disconnect();
       canvas.removeEventListener('webglcontextlost', handleContextLost);
+      root.removeEventListener('click', handleClick);
       root.removeEventListener(
         'pointermove',
         handlePointerMove as EventListener,

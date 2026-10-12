@@ -16,6 +16,7 @@ export const DEFAULT_SETTINGS: JarvisSettings = {
   voiceGender: 'male',
   soundEffects: true,
   compactMode: false,
+  theme: 'cyan',
 };
 
 export function loadSettings(): JarvisSettings {

@@ -6,11 +6,14 @@ import type {
   SystemTelemetry,
   JarvisSettings,
   UserMemoryItem,
+  HudTheme,
 } from '../types/hud';
 
 import { Header } from './header/Header';
 import { AssistantOrb } from './orb/AssistantOrb';
 import { CommandDock } from './controls/CommandDock';
+import { QuickDirectiveChips } from './controls/QuickDirectiveChips';
+import { AcousticWaveformRibbon } from './controls/AcousticWaveformRibbon';
 import { TacticalDialogueStream } from './hud/TacticalDialogueStream';
 import { TacticalTelemetryStream } from './hud/TacticalTelemetryStream';
 import { CommsDrawer } from './drawer/CommsDrawer';
@@ -402,15 +405,26 @@ export const JarvisHUD: React.FC = () => {
   };
 
   const latestMessage = messages[messages.length - 1];
+  const currentTheme: HudTheme = settings.theme || 'cyan';
+
+  const handleSelectTheme = (newTheme: HudTheme) => {
+    const updated = { ...settings, theme: newTheme };
+    handleSaveSettings(updated);
+  };
 
   return (
-    <div className="hud-container">
+    <div
+      className={`hud-container theme-${currentTheme}`}
+      data-theme={currentTheme}
+    >
       <div className="scanline-overlay" />
 
       {/* 1. Clean Minimal Header */}
       <Header
         telemetry={telemetry}
         assistantState={assistantState}
+        currentTheme={currentTheme}
+        onSelectTheme={handleSelectTheme}
         onToggleMic={handleToggleMic}
         onToggleSpeaker={handleToggleSpeaker}
         onOpenSettings={() => setSettingsOpen(true)}
@@ -430,8 +444,12 @@ export const JarvisHUD: React.FC = () => {
           assistantState={assistantState}
         />
 
-        {/* Big Solar Particle Globe Centerpiece */}
-        <AssistantOrb state={assistantState} onInterrupt={handleHalt} />
+        {/* Big Solar Particle Globe Centerpiece with Shockwave */}
+        <AssistantOrb
+          state={assistantState}
+          theme={currentTheme}
+          onInterrupt={handleHalt}
+        />
 
         {/* Right Flank: Frameless Hacker Telemetry Stream & State Vector */}
         <TacticalTelemetryStream
@@ -441,12 +459,37 @@ export const JarvisHUD: React.FC = () => {
           onStateChange={handleManualStateChange}
         />
 
-        {/* Minimalist Floating Command Input */}
-        <CommandDock
-          assistantState={assistantState}
-          onSendMessage={handleSendMessage}
-          onVoiceTrigger={handleVoiceInputTrigger}
-        />
+        {/* Bottom Floating Deck: Shortcuts, Waveform & Command Bar */}
+        <div
+          style={{
+            position: 'absolute',
+            bottom: '16px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            width: '100%',
+            maxWidth: '560px',
+            zIndex: 30,
+          }}
+        >
+          {/* Quick Directive Shortcut Chips */}
+          <QuickDirectiveChips
+            onSelectDirective={handleSendMessage}
+            disabled={assistantState === 'thinking'}
+          />
+
+          {/* Voice-Reactive Acoustic Waveform Ribbon */}
+          <AcousticWaveformRibbon state={assistantState} />
+
+          {/* Minimalist Floating Command Input */}
+          <CommandDock
+            assistantState={assistantState}
+            onSendMessage={handleSendMessage}
+            onVoiceTrigger={handleVoiceInputTrigger}
+          />
+        </div>
       </main>
 
       {/* 4. Slide-Out Comms Drawer */}
