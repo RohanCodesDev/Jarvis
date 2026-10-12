@@ -115,11 +115,6 @@ export const AssistantOrb: React.FC<AssistantOrbProps> = ({
 
       {/* Massive Holographic Viewport & Big Solar Globe */}
       <div className="hero-orb-viewport">
-        <div className="holo-ring holo-ring-outer" />
-        <div className="holo-ring holo-ring-middle" />
-        <div className="holo-ring holo-ring-inner" />
-        <div className="holo-radar-sweep" />
-
         <div
           className="orb-canvas-container"
           title="Interactive Solar Particle Globe (Hover/Interact with Cursor)"
