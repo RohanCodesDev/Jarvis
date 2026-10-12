@@ -11,8 +11,8 @@ import type {
 import { Header } from './header/Header';
 import { AssistantOrb } from './orb/AssistantOrb';
 import { CommandDock } from './controls/CommandDock';
-import { StateToggles } from './controls/StateToggles';
-import { DialogueToast } from './dialogue/DialogueToast';
+import { TacticalDialogueStream } from './hud/TacticalDialogueStream';
+import { TacticalTelemetryStream } from './hud/TacticalTelemetryStream';
 import { CommsDrawer } from './drawer/CommsDrawer';
 import { SettingsModal } from './modals/SettingsModal';
 import { MemoryViewer } from './modals/MemoryViewer';
@@ -420,13 +420,27 @@ export const JarvisHUD: React.FC = () => {
         messagesCount={messages.length}
       />
 
-      {/* 2. Dominant Hero Center Stage (Big Orb) */}
+      {/* 2. Dominant Hero Center Stage with Frameless Left & Right Hacker Flanks */}
       <main className="hud-hero-stage">
-        {/* Floating Minimal Dialogue (shows latest exchange) */}
-        <DialogueToast message={latestMessage} />
+        {/* Left Flank: Frameless Hacker Dialogue Stream with Typewriter Animation */}
+        <TacticalDialogueStream
+          latestMessage={latestMessage}
+          previousMessage={
+            messages.length > 1 ? messages[messages.length - 2] : undefined
+          }
+          assistantState={assistantState}
+        />
 
         {/* Big Solar Particle Globe Centerpiece */}
         <AssistantOrb state={assistantState} onInterrupt={handleHalt} />
+
+        {/* Right Flank: Frameless Hacker Telemetry Stream & State Vector */}
+        <TacticalTelemetryStream
+          telemetry={telemetry}
+          activities={activities}
+          assistantState={assistantState}
+          onStateChange={handleManualStateChange}
+        />
 
         {/* Minimalist Floating Command Input */}
         <CommandDock
@@ -435,12 +449,6 @@ export const JarvisHUD: React.FC = () => {
           onVoiceTrigger={handleVoiceInputTrigger}
         />
       </main>
-
-      {/* 3. Extreme-Right Minimal State Management Toggles */}
-      <StateToggles
-        currentState={assistantState}
-        onStateChange={handleManualStateChange}
-      />
 
       {/* 4. Slide-Out Comms Drawer */}
       <CommsDrawer

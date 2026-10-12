@@ -292,52 +292,287 @@
   }
 }
 
-/* 3. Floating Dialogue Toast (appears above/below the orb) */
-.floating-dialogue-card {
+/* 3. Frameless Hacker Tactical Flanks (Left & Right Streams - ZERO CARDS/DIVS) */
+
+.hacker-dialogue-flank {
   position: absolute;
+  left: 24px;
   top: 18px;
-  max-width: 560px;
-  width: 90%;
-  background: rgba(4, 9, 20, 0.78);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(0, 240, 255, 0.22);
-  border-radius: 12px;
-  padding: 12px 18px;
-  box-shadow:
-    0 10px 30px rgba(0, 0, 0, 0.7),
-    0 0 16px rgba(0, 240, 255, 0.08);
+  width: 360px;
+  max-width: 27vw;
   z-index: 25;
-  animation: toast-drop 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  pointer-events: auto;
+  user-select: text;
+  font-family: var(--font-mono);
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
-@keyframes toast-drop {
-  from {
-    opacity: 0;
-    transform: translateY(-10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.floating-dialogue-header {
+.hacker-stream-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-family: var(--font-hud);
-  font-size: 11px;
-  letter-spacing: 0.1em;
+  font-size: 10.5px;
+  letter-spacing: 0.16em;
   color: var(--hud-cyan);
-  margin-bottom: 6px;
+  opacity: 0.85;
+  text-shadow: 0 0 8px rgba(0, 240, 255, 0.4);
 }
 
-.floating-dialogue-text {
+.hacker-stream-header.right-align {
+  justify-content: space-between;
+}
+
+.hacker-meta {
+  color: var(--text-dim);
+  font-size: 9.5px;
+  letter-spacing: 0.12em;
+}
+
+.hacker-operator-line {
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: rgba(147, 197, 253, 0.65);
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  word-break: break-word;
+}
+
+.hacker-prompt-symbol {
+  color: var(--hud-cyan);
+  font-weight: 700;
+  opacity: 0.7;
+}
+
+.hacker-operator-label {
+  color: rgba(147, 197, 253, 0.85);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+}
+
+.hacker-operator-content {
+  font-style: italic;
+}
+
+.hacker-response-line {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.hacker-response-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  color: var(--hud-cyan);
+  font-weight: 600;
+  text-shadow: 0 0 6px rgba(0, 240, 255, 0.4);
+}
+
+.hacker-timestamp {
+  color: var(--text-dim);
+  font-size: 9.5px;
+  font-weight: 400;
+}
+
+.hacker-typewriter-body {
   font-size: 13.5px;
-  line-height: 1.5;
+  line-height: 1.55;
   color: #ffffff;
+  text-shadow: 0 0 8px rgba(0, 240, 255, 0.22);
+  word-break: break-word;
+}
+
+.hacker-cursor {
+  display: inline-block;
+  color: var(--hud-cyan);
+  text-shadow: 0 0 10px var(--hud-cyan);
+  margin-left: 2px;
+  font-size: 12.5px;
+  line-height: 1;
+  vertical-align: baseline;
+}
+
+.hacker-cursor.hidden {
+  opacity: 0;
+}
+
+.hacker-cursor.visible {
+  opacity: 1;
+}
+
+.hacker-stream-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 9.5px;
+  color: var(--text-dim);
+  letter-spacing: 0.1em;
+  opacity: 0.6;
+}
+
+/* Right Flank: Tactical Telemetry Stream */
+.hacker-telemetry-flank {
+  position: absolute;
+  right: 24px;
+  top: 18px;
+  width: 320px;
+  max-width: 25vw;
+  z-index: 25;
+  pointer-events: auto;
   user-select: text;
+  font-family: var(--font-mono);
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.hacker-telemetry-block {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.hacker-stat-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.stat-label {
+  color: rgba(0, 240, 255, 0.7);
+  letter-spacing: 0.08em;
+  font-weight: 500;
+}
+
+.stat-divider {
+  color: rgba(255, 255, 255, 0.18);
+  margin: 0 6px;
+}
+
+.stat-val {
+  color: rgba(255, 255, 255, 0.92);
+  text-align: right;
+  text-shadow: 0 0 6px rgba(0, 240, 255, 0.18);
+}
+
+.stat-val.accent {
+  color: var(--hud-cyan);
+  font-weight: 600;
+  text-shadow: 0 0 8px var(--hud-cyan);
+}
+
+.stat-val.highlight {
+  color: #86efac;
+  text-shadow: 0 0 8px rgba(134, 239, 172, 0.4);
+}
+
+.stat-val.truncate {
+  max-width: 130px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hacker-live-events {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.events-title {
+  font-size: 9.5px;
+  letter-spacing: 0.14em;
+  color: var(--text-dim);
+  opacity: 0.75;
+}
+
+.event-typewriter-line {
+  font-size: 10.5px;
+  line-height: 1.45;
+  color: rgba(224, 242, 254, 0.85);
+  word-break: break-word;
+}
+
+.event-prefix {
+  color: var(--hud-cyan);
+  font-weight: 700;
+}
+
+.hacker-modes-block {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.modes-title {
+  font-size: 9.5px;
+  letter-spacing: 0.14em;
+  color: var(--text-dim);
+  opacity: 0.75;
+}
+
+.modes-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.hacker-mode-item {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  background: transparent;
+  border: none;
+  padding: 2px 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-dim);
+  cursor: pointer;
+  outline: none;
+  transition: all 0.18s ease;
+  text-align: left;
+}
+
+.hacker-mode-item:hover {
+  color: #ffffff;
+  text-shadow: 0 0 8px rgba(255, 255, 255, 0.5);
+  transform: translateX(2px);
+}
+
+.hacker-mode-item.active {
+  color: var(--mode-color);
+  font-weight: 600;
+  text-shadow: 0 0 10px var(--mode-color);
+}
+
+.mode-bracket {
+  font-weight: 700;
+  letter-spacing: -0.05em;
+}
+
+.mode-name {
+  letter-spacing: 0.08em;
+}
+
+.mode-code {
+  font-size: 9.5px;
+  color: var(--text-dim);
+  opacity: 0.55;
+  margin-left: auto;
 }
 
 /* 4. Acoustic Waveform Visualizer */
@@ -629,98 +864,4 @@
   }
 }
 
-/* 7. Extreme-Right Minimal State Management Toggles */
-.hud-state-rail {
-  position: fixed;
-  right: 22px;
-  top: 50%;
-  transform: translateY(-50%);
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 8px;
-  z-index: 30;
-  pointer-events: auto;
-  user-select: none;
-}
-
-.state-rail-header {
-  font-family: var(--font-hud);
-  font-size: 9.5px;
-  font-weight: 600;
-  letter-spacing: 0.22em;
-  color: var(--text-dim);
-  text-transform: uppercase;
-  padding-left: 10px;
-  opacity: 0.65;
-}
-
-.state-rail-list {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  background: rgba(3, 7, 16, 0.45);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 16px;
-  padding: 6px;
-  box-shadow:
-    0 10px 30px rgba(0, 0, 0, 0.5),
-    inset 0 0 12px rgba(255, 255, 255, 0.02);
-}
-
-.state-toggle-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 9px;
-  padding: 6px 12px;
-  border-radius: 9999px;
-  background: transparent;
-  border: 1px solid transparent;
-  outline: none;
-  cursor: pointer;
-  font-family: var(--font-hud);
-  font-size: 12.5px;
-  font-weight: 500;
-  letter-spacing: 0.05em;
-  color: var(--text-secondary);
-  transition: all 0.22s ease;
-  width: 100%;
-  text-align: left;
-}
-
-.state-toggle-btn:hover {
-  color: #ffffff;
-  background: rgba(255, 255, 255, 0.04);
-}
-
-.state-toggle-indicator {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.2);
-  transition: all 0.22s ease;
-  flex-shrink: 0;
-}
-
-.state-toggle-btn.active {
-  color: #ffffff;
-  background: rgba(255, 255, 255, 0.07);
-  border-color: rgba(255, 255, 255, 0.09);
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4);
-}
-
-.state-toggle-btn.active .state-toggle-indicator {
-  background: var(--state-accent);
-  box-shadow:
-    0 0 8px var(--state-accent),
-    0 0 16px var(--state-accent);
-  transform: scale(1.3);
-}
-
-.state-toggle-btn.active .state-toggle-label {
-  color: var(--state-accent);
-  font-weight: 600;
-  text-shadow: 0 0 10px var(--state-accent);
-}
+/* Legacy State Rail removed in favor of frameless .hacker-modes-block */
