@@ -23,6 +23,7 @@ import {
 } from './services/secretStore';
 import { loadSettings, saveSettings } from './services/settingsStore';
 import { aiManager } from './services/ai/aiManager';
+import { whisperTranscriber } from './services/voice/whisperTranscriber';
 
 function setupIpcHandlers() {
   ipcMain.handle('desktop:getSystemInfo', async (event) => {
@@ -193,6 +194,20 @@ function setupIpcHandlers() {
     );
 
     return { started: true };
+  });
+
+  ipcMain.handle('desktop:transcribeAudio', async (event, payload: unknown) => {
+    if (!isValidSender(event)) {
+      throw new Error('Unauthorized IPC sender');
+    }
+    if (typeof payload !== 'object' || payload === null) {
+      return { text: '', source: 'mock', error: 'Invalid audio payload' };
+    }
+    const data = payload as { base64Audio: string; format?: string };
+    if (!data.base64Audio) {
+      return { text: '', source: 'mock', error: 'Audio data is empty' };
+    }
+    return whisperTranscriber.transcribe(data);
   });
 }
 

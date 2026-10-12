@@ -73,11 +73,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     setKeyStatusMsg('Verifying key with OpenRouter API...');
     try {
       if (window.jarvisDesktop?.validateApiKey) {
-        const validation = await window.jarvisDesktop.validateApiKey(trimmed);
-        if (!validation.valid) {
-          setKeyStatusMsg(
-            `Verification warning: ${validation.error || 'Key rejected by OpenRouter'}`,
-          );
+        try {
+          const validation = await window.jarvisDesktop.validateApiKey(trimmed);
+          if (!validation.valid) {
+            setKeyStatusMsg(
+              `Verification warning: ${validation.error || 'Key rejected by OpenRouter'}`,
+            );
+          }
+        } catch {
+          // Main process reload pending or validation endpoint unreachable
         }
       }
 

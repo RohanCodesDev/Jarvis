@@ -56,6 +56,9 @@ const desktopAPI: DesktopBridgeAPI = {
   cancelChatMessage: async (streamId: string) => {
     return ipcRenderer.invoke('desktop:cancelChatMessage', streamId);
   },
+  transcribeAudio: async (params) => {
+    return ipcRenderer.invoke('desktop:transcribeAudio', params);
+  },
 };
 
 contextBridge.exposeInMainWorld('jarvisDesktop', desktopAPI);

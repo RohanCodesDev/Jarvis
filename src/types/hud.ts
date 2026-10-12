@@ -101,6 +101,10 @@ export interface DesktopBridgeAPI {
     onChunk: (event: ChatStreamChunkEvent) => void,
   ) => () => void;
   cancelChatMessage: (streamId: string) => Promise<void>;
+  transcribeAudio: (params: {
+    base64Audio: string;
+    format?: string;
+  }) => Promise<{ text: string; source: 'whisper' | 'mock'; error?: string }>;
 }
 
 declare global {

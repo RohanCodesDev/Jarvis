@@ -175,3 +175,59 @@ describe('Stage 3: Voice Interaction - VoiceCoordinator Orchestration', () => {
     expect(coordinator.getState()).toBe('idle');
   });
 });
+
+describe('Stage 3: Voice Interaction - WhisperTranscriber', () => {
+  it('falls back to mock text when no API key is present', async () => {
+    const { WhisperTranscriber } =
+      await import('../src/services/voice/whisperTranscriber');
+    const transcriber = new WhisperTranscriber(() => null);
+
+    const result = await transcriber.transcribe({
+      base64Audio: 'fake-base64-data',
+    });
+
+    expect(result.source).toBe('mock');
+    expect(result.text).toBe('Run complete desktop telemetry diagnostics');
+    expect(result.error).toBeUndefined();
+  });
+
+  it('transcribes audio via OpenRouter API when key is configured', async () => {
+    const { WhisperTranscriber } =
+      await import('../src/services/voice/whisperTranscriber');
+    const transcriber = new WhisperTranscriber(() => 'sk-or-valid-key');
+
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ text: 'System status report' }),
+    });
+
+    const result = await transcriber.transcribe({
+      base64Audio: 'valid-audio-base64',
+    });
+
+    expect(result.source).toBe('whisper');
+    expect(result.text).toBe('System status report');
+    expect(result.error).toBeUndefined();
+  });
+
+  it('handles API errors gracefully', async () => {
+    const { WhisperTranscriber } =
+      await import('../src/services/voice/whisperTranscriber');
+    const transcriber = new WhisperTranscriber(() => 'sk-or-valid-key');
+
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 500,
+      statusText: 'Internal Server Error',
+      text: async () => 'Provider error',
+    });
+
+    const result = await transcriber.transcribe({
+      base64Audio: 'corrupt-audio',
+    });
+
+    expect(result.source).toBe('whisper');
+    expect(result.error).toContain('Whisper transcription failed (500)');
+  });
+});

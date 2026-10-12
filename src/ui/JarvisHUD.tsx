@@ -396,9 +396,9 @@ export const JarvisHUD: React.FC = () => {
 
   const handleVoiceInputTrigger = () => {
     if (assistantState === 'listening') {
+      addActivity('info', 'voice', 'Transcribing audio via Whisper...');
+      setAssistantState('thinking');
       voiceCoordinatorRef.current.stopListening();
-      setAssistantState('idle');
-      addActivity('info', 'voice', 'Microphone capture closed.');
       return;
     }
 
@@ -415,7 +415,7 @@ export const JarvisHUD: React.FC = () => {
       addActivity(
         'warn',
         'voice',
-        'Web Speech recognition unavailable in host runtime.',
+        'Microphone capture is unavailable on this platform.',
       );
       return;
     }
@@ -423,7 +423,7 @@ export const JarvisHUD: React.FC = () => {
     addActivity(
       'info',
       'voice',
-      'Audio transcriber engaged. Listening for vocal directive...',
+      'Whisper recording active. Speak your directive, then click mic again to process...',
     );
 
     voiceCoordinatorRef.current.startListening({
@@ -433,17 +433,8 @@ export const JarvisHUD: React.FC = () => {
         else if (st === 'idle') setAssistantState('idle');
         else if (st === 'error') setAssistantState('error');
       },
-      onInterimTranscript: (interim) => {
-        if (interim.length > 3) {
-          addActivity('info', 'voice', `Transcribing: "${interim}"`);
-        }
-      },
       onFinalTranscript: (finalText) => {
-        addActivity(
-          'success',
-          'voice',
-          `Vocal directive transcribed: "${finalText}"`,
-        );
+        addActivity('success', 'voice', `Whisper transcribed: "${finalText}"`);
         handleSendMessage(finalText);
       },
       onError: (err) => {

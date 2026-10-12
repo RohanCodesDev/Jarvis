@@ -5,7 +5,7 @@ import {
   type SpeechSynthesisOptions,
   type VoiceState,
 } from './types';
-import { BrowserSpeechRecognizer } from './browserRecognizer';
+import { WhisperSpeechRecognizer } from './whisperRecognizer';
 import { BrowserSpeechSynthesizer } from './browserSynthesizer';
 
 export interface VoiceCoordinatorCallbacks {
@@ -24,7 +24,7 @@ export class VoiceCoordinator {
     recognizer?: ISpeechRecognizer,
     synthesizer?: ISpeechSynthesizer,
   ) {
-    this.recognizer = recognizer || new BrowserSpeechRecognizer();
+    this.recognizer = recognizer || new WhisperSpeechRecognizer();
     this.synthesizer = synthesizer || new BrowserSpeechSynthesizer();
   }
 
