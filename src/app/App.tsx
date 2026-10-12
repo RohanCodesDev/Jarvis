@@ -306,11 +306,11 @@ export const App: React.FC = () => {
 
       {/* 2. Dominant Hero Center Stage (Big Orb) */}
       <main className="hud-hero-stage">
-        {/* Floating Dialogue Toast (appears when there's an active message) */}
+        {/* Floating Minimal Dialogue (shows latest exchange) */}
         {latestMessage && (
           <div className="floating-dialogue-card">
             <div className="floating-dialogue-header">
-              <span>{latestMessage.sender === 'user' ? '[OPERATOR // DIRECTIVE]' : '[JARVIS // SYNTHESIS]'}</span>
+              <span>{latestMessage.sender === 'user' ? 'YOU' : 'JARVIS'}</span>
               <span>{latestMessage.timestamp}</span>
             </div>
             <div className="floating-dialogue-text">
@@ -325,26 +325,8 @@ export const App: React.FC = () => {
           onInterrupt={handleHalt}
         />
 
-        {/* 3. Floating Command Dock (Bottom Center) */}
+        {/* Minimalist Floating Command Input — Just typing field with microphone and send */}
         <div className="floating-command-dock">
-          <div style={{ display: 'flex', gap: '6px', justifyContent: 'center' }}>
-            {[
-              { label: '[DIAGNOSTICS]', prompt: 'Run complete desktop telemetry diagnostics' },
-              { label: '[MEMORY]', prompt: 'Query durable memory banks' },
-              { label: '[AUDIO_TEST]', prompt: 'Initiate acoustic synthesis harmonic test' },
-              { label: '[DEFCON_ALERT]', prompt: 'Simulate critical subsystem alert' },
-            ].map((p, idx) => (
-              <button
-                key={idx}
-                className="protocol-chip"
-                style={{ fontSize: '9.5px', padding: '2px 8px' }}
-                onClick={() => handleSendMessage(p.prompt)}
-              >
-                {p.label}
-              </button>
-            ))}
-          </div>
-
           <form
             className="command-input-bar"
             onSubmit={(e) => {
@@ -352,11 +334,10 @@ export const App: React.FC = () => {
               handleSendMessage(inputText);
             }}
           >
-            <Terminal size={14} color="var(--hud-cyan)" style={{ opacity: 0.8, marginLeft: '4px' }} />
             <input
               type="text"
               className="command-text-field"
-              placeholder="Transmit directive to JARVIS... (Return to transmit)"
+              placeholder="Ask JARVIS anything..."
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
               disabled={assistantState === 'thinking'}
@@ -364,58 +345,24 @@ export const App: React.FC = () => {
 
             <button
               type="button"
-              className="hud-btn hud-btn-icon"
-              style={{ width: '30px', height: '30px' }}
-              title="Dictate directive with voice"
+              className={`command-action-icon ${assistantState === 'listening' ? 'listening' : ''}`}
+              title="Dictate with microphone"
               onClick={handleVoiceInputTrigger}
             >
-              <Mic size={14} />
+              <Mic size={18} />
             </button>
 
             <button
               type="submit"
-              className="hud-btn hud-btn-primary"
-              style={{ padding: '6px 12px', fontSize: '11px' }}
+              className="command-action-icon send-action"
               disabled={!inputText.trim() || assistantState === 'thinking'}
+              title="Send directive"
             >
-              <Send size={12} />
-              <span>Send</span>
+              <Send size={18} />
             </button>
           </form>
         </div>
       </main>
-
-      {/* 4. Single-line Telemetry Footer */}
-      <footer
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '4px 12px',
-          minHeight: '26px',
-          fontFamily: 'var(--font-mono)',
-          fontSize: '10px',
-          color: 'var(--text-dim)',
-          zIndex: 20,
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflow: 'hidden' }}>
-          <Activity size={12} color="var(--hud-cyan)" />
-          <span style={{ color: 'var(--hud-cyan)' }}>SYS.LOG:</span>
-          <span style={{ color: 'var(--text-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {recentActivities[0]?.message || 'Standby.'}
-          </span>
-        </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ color: '#86efac' }}>
-            <ShieldCheck size={11} style={{ display: 'inline', marginRight: '3px' }} />
-            SANDBOX ENFORCED
-          </span>
-          <span>•</span>
-          <span style={{ color: 'var(--hud-cyan)' }}>SEC.LEVEL // L0</span>
-        </div>
-      </footer>
 
       {/* 5. Slide-Out Comms Drawer */}
       {drawerOpen && (

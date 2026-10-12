@@ -31,15 +31,14 @@ export const Header: React.FC<HeaderProps> = ({
         <span className={`hud-status-orb ${assistantState}`} title={`Status: ${assistantState.toUpperCase()}`} />
       </div>
 
-      {/* Top Right: Icons and labels for each icon */}
+      {/* Top Right: Icons and labels for each icon - pure borderless, no small divs */}
       <div className="hud-header-actions">
         <button
           className="hud-header-btn"
           title={telemetry.micEnabled ? 'Mute Microphone' : 'Engage Microphone'}
           onClick={onToggleMic}
-          style={{ borderColor: telemetry.micEnabled ? 'var(--hud-cyan)' : 'var(--hud-cyan-border)' }}
         >
-          {telemetry.micEnabled ? <Mic size={14} /> : <MicOff size={14} color="var(--text-dim)" />}
+          {telemetry.micEnabled ? <Mic size={15} /> : <MicOff size={15} color="var(--text-dim)" />}
           <span>{telemetry.micEnabled ? 'Mic' : 'Muted'}</span>
         </button>
 
@@ -47,9 +46,8 @@ export const Header: React.FC<HeaderProps> = ({
           className="hud-header-btn"
           title={telemetry.speakerEnabled ? 'Mute Speech Output' : 'Engage Speech Output'}
           onClick={onToggleSpeaker}
-          style={{ borderColor: telemetry.speakerEnabled ? 'var(--hud-cyan)' : 'var(--hud-cyan-border)' }}
         >
-          {telemetry.speakerEnabled ? <Volume2 size={14} /> : <VolumeX size={14} color="var(--text-dim)" />}
+          {telemetry.speakerEnabled ? <Volume2 size={15} /> : <VolumeX size={15} color="var(--text-dim)" />}
           <span>{telemetry.speakerEnabled ? 'Audio' : 'Muted'}</span>
         </button>
 
@@ -58,7 +56,7 @@ export const Header: React.FC<HeaderProps> = ({
           onClick={onToggleDrawer}
           title="Open Communications History Drawer"
         >
-          <MessageSquare size={14} />
+          <MessageSquare size={15} />
           <span>Comms ({messagesCount})</span>
         </button>
 
@@ -67,7 +65,7 @@ export const Header: React.FC<HeaderProps> = ({
           onClick={onOpenMemory}
           title="Inspect Persistent Memory Bank"
         >
-          <Database size={14} />
+          <Database size={15} />
           <span>Memory</span>
         </button>
 
@@ -76,7 +74,7 @@ export const Header: React.FC<HeaderProps> = ({
           onClick={onOpenSettings}
           title="System & AI Parameters"
         >
-          <Settings size={14} />
+          <Settings size={15} />
           <span>Settings</span>
         </button>
       </div>
