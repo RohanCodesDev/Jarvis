@@ -1,0 +1,174 @@
+:root {
+  --bg-primary: #050811;
+  --bg-surface: #0a1020;
+  --bg-surface-elevated: #0f182f;
+  --bg-surface-translucent: rgba(10, 16, 32, 0.85);
+  
+  --border-subtle: rgba(0, 229, 255, 0.12);
+  --border-bright: rgba(0, 229, 255, 0.35);
+  --border-glow: rgba(0, 229, 255, 0.6);
+  
+  --cyan-primary: #00e5ff;
+  --cyan-glow: rgba(0, 229, 255, 0.25);
+  --cyan-dim: #0099aa;
+  
+  --blue-accent: #0070f3;
+  --blue-glow: rgba(0, 112, 243, 0.3);
+  
+  --state-idle: #00e5ff;
+  --state-listening: #00ffaa;
+  --state-thinking: #ffaa00;
+  --state-speaking: #38bdf8;
+  --state-error: #ff3366;
+  
+  --text-primary: #f0f6fc;
+  --text-secondary: #8b9bb4;
+  --text-muted: #4a5a74;
+  --text-cyan: #67e8f9;
+  
+  --font-hud: 'Chakra Petch', sans-serif;
+  --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+  
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 14px;
+  --radius-full: 9999px;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  user-select: none;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  overflow: hidden;
+  height: 100vh;
+  width: 100vw;
+  -webkit-font-smoothing: antialiased;
+  background-image: 
+    radial-gradient(circle at 50% 0%, rgba(0, 229, 255, 0.06) 0%, transparent 50%),
+    radial-gradient(circle at 85% 100%, rgba(0, 112, 243, 0.05) 0%, transparent 40%),
+    linear-gradient(rgba(0, 229, 255, 0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 229, 255, 0.02) 1px, transparent 1px);
+  background-size: 100% 100%, 100% 100%, 32px 32px, 32px 32px;
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(5, 8, 17, 0.6);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 229, 255, 0.2);
+  border-radius: var(--radius-full);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 229, 255, 0.4);
+}
+
+/* Glass panel utility */
+.hud-panel {
+  background: var(--bg-surface-translucent);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  position: relative;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+.hud-panel::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 8px;
+  height: 8px;
+  border-top: 1px solid var(--cyan-primary);
+  border-left: 1px solid var(--cyan-primary);
+  pointer-events: none;
+}
+
+.hud-panel::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 8px;
+  height: 8px;
+  border-bottom: 1px solid var(--cyan-primary);
+  border-right: 1px solid var(--cyan-primary);
+  pointer-events: none;
+}
+
+/* Button & Interactive styles */
+.hud-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 14px;
+  font-family: var(--font-hud);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--cyan-primary);
+  background: rgba(0, 229, 255, 0.06);
+  border: 1px solid var(--border-bright);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  outline: none;
+}
+
+.hud-btn:hover {
+  background: rgba(0, 229, 255, 0.15);
+  border-color: var(--cyan-primary);
+  box-shadow: 0 0 14px var(--cyan-glow);
+  transform: translateY(-1px);
+}
+
+.hud-btn:active {
+  transform: translateY(0);
+}
+
+.hud-btn-primary {
+  background: linear-gradient(135deg, rgba(0, 229, 255, 0.25), rgba(0, 112, 243, 0.3));
+  border-color: var(--cyan-primary);
+  color: #ffffff;
+  box-shadow: 0 0 12px rgba(0, 229, 255, 0.2);
+}
+
+.hud-btn-primary:hover {
+  background: linear-gradient(135deg, rgba(0, 229, 255, 0.4), rgba(0, 112, 243, 0.45));
+  box-shadow: 0 0 20px rgba(0, 229, 255, 0.4);
+}
+
+.hud-btn-icon {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: var(--radius-sm);
+}
+
+.hud-tag {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 2px 7px;
+  border-radius: 3px;
+  background: rgba(0, 229, 255, 0.08);
+  border: 1px solid var(--border-subtle);
+  color: var(--cyan-dim);
+}
