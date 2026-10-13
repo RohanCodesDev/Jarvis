@@ -20,7 +20,7 @@ export const DEFAULT_SETTINGS: JarvisSettings = {
   compactMode: false,
   theme: 'cyan',
   webSearchEnabled: true,
-  wakeWordEnabled: true,
+  wakeWordEnabled: false,
 };
 
 export function loadSettings(): JarvisSettings {

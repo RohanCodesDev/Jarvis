@@ -40,6 +40,7 @@ export const JarvisHUD: React.FC = () => {
     voiceGender: 'male',
     soundEffects: true,
     compactMode: false,
+    wakeWordEnabled: false,
   });
 
   const [telemetry, setTelemetry] = useState<SystemTelemetry>({
@@ -574,8 +575,7 @@ export const JarvisHUD: React.FC = () => {
 
   // Hands-free Wake-Word ("Hey Jarvis") background sentinel
   useEffect(() => {
-    const isEnabled =
-      settings.wakeWordEnabled !== false && telemetry.micEnabled;
+    const isEnabled = Boolean(settings.wakeWordEnabled) && telemetry.micEnabled;
 
     if (!isEnabled) {
       wakeWordDetector.stop();
@@ -689,7 +689,7 @@ export const JarvisHUD: React.FC = () => {
         onToggleMic={handleToggleMic}
         onToggleSpeaker={handleToggleSpeaker}
         wakeWordActive={
-          settings.wakeWordEnabled !== false && telemetry.micEnabled
+          Boolean(settings.wakeWordEnabled) && telemetry.micEnabled
         }
         onToggleWakeWord={handleToggleWakeWord}
         onOpenSettings={() => setSettingsOpen(true)}

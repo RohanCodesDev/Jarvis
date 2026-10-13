@@ -10,8 +10,8 @@ export interface WakeWordCallbacks {
 }
 
 const WAKE_PATTERNS = [
-  /\b(?:hey|hi|ok|okay)\s+jarvis[\s,.:!-]*(.*)$/i,
-  /\bjarvis[\s,.:!-]*(.*)$/i,
+  /\b(?:hey|hi|ok|okay)\s+jarvis\b[\s,.:!-]*(.*)$/i,
+  /\bjarvis\b[\s,.:!]+(.+)$/i,
 ];
 
 export class WakeWordDetector {
@@ -184,14 +184,14 @@ export class WakeWordDetector {
       }
       const rms = Math.sqrt(sum / dataArray.length);
 
-      const ENERGY_THRESHOLD = 0.045;
+      const ENERGY_THRESHOLD = 0.075;
 
       if (rms > ENERGY_THRESHOLD) {
         this.speechFrames++;
         this.silenceFrames = 0;
 
-        // When speech is detected for > 150ms, start collecting audio segment
-        if (this.speechFrames >= 2 && !this.isSpeechActive) {
+        // When speech is sustained for > 320ms (4 consecutive frames), start collecting audio segment
+        if (this.speechFrames >= 4 && !this.isSpeechActive) {
           this.isSpeechActive = true;
           this.startSegmentRecording();
         }
@@ -262,8 +262,8 @@ export class WakeWordDetector {
           type: recorder.mimeType || 'audio/webm',
         });
 
-        // Ignore tiny accidental noise clicks (< 1500 bytes)
-        if (blob.size < 1500) {
+        // Ignore tiny accidental noise clicks (< 3500 bytes)
+        if (blob.size < 3500) {
           this.resetRecordingState();
           return;
         }
