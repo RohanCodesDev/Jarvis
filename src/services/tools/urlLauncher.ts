@@ -5,6 +5,12 @@ export function sanitizeAndValidateUrl(rawInput: string): string | null {
   if (!rawInput) return null;
   let target = rawInput.trim();
 
+  // Allow safe Windows Settings protocols (e.g. ms-settings:display)
+  if (target.toLowerCase().startsWith('ms-settings:')) {
+    const cleanSetting = target.replace(/[^a-zA-Z0-9:-]/g, '');
+    return cleanSetting;
+  }
+
   // If another scheme like file:, javascript:, data:, ftp:, etc. is present, reject immediately
   if (/^[a-z0-9+.-]+:/i.test(target) && !/^https?:\/\//i.test(target)) {
     return null;

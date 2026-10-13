@@ -109,22 +109,51 @@ export function detectDirectIntent(input: string): DetectedAction | null {
       confidence: 'high',
     };
   }
-  if (lower.includes('dim screen') || lower.includes('dim display')) {
+  const dimTriggers = [
+    'dim brightness',
+    'dim my brightness',
+    'dim the brightness',
+    'dim screen',
+    'dim display',
+    'dim my screen',
+    'dim the screen',
+    'lower brightness',
+    'lower my brightness',
+    'lower the brightness',
+    'reduce brightness',
+    'decrease brightness',
+    'turn down brightness',
+    'darker screen',
+    'darker display',
+  ];
+  if (dimTriggers.some((t) => lower.includes(t))) {
     return {
       toolId: 'brightness_control',
       args: { action: 'set', level: 35 },
       confidence: 'high',
     };
   }
-  if (lower.includes('max brightness') || lower.includes('full brightness')) {
+
+  const raiseTriggers = [
+    'increase brightness',
+    'raise brightness',
+    'brighten screen',
+    'turn up brightness',
+    'boost brightness',
+    'brighter screen',
+    'max brightness',
+    'full brightness',
+  ];
+  if (raiseTriggers.some((t) => lower.includes(t))) {
     return {
       toolId: 'brightness_control',
-      args: { action: 'set', level: 100 },
+      args: { action: 'set', level: 85 },
       confidence: 'high',
     };
   }
+
   const brightnessMatch = lower.match(
-    /(?:set brightness to|brightness to|brightness)\s*(\d{1,3})%?/i,
+    /(?:set\s+)?(?:the\s+|my\s+)?brightness(?:\s+to)?\s*(\d{1,3})%?/i,
   );
   if (brightnessMatch && brightnessMatch[1]) {
     const level = parseInt(brightnessMatch[1], 10);

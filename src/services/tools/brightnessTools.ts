@@ -58,7 +58,7 @@ export async function setDisplayBrightness(
   }
 
   try {
-    const cmd = `powershell -NoProfile -NonInteractive -Command "(Get-CimInstance -Namespace root/WMI -ClassName WmiMonitorBrightnessMethods).WmiSetBrightness(1, ${target})"`;
+    const cmd = `powershell -NoProfile -NonInteractive -Command "(Get-WmiObject -Namespace root/WMI -Class WmiMonitorBrightnessMethods).WmiSetBrightness(1, ${target})"`;
     await execAsync(cmd, { timeout: 4000 });
     const elapsed = Math.round(performance.now() - startTime);
 

@@ -71,6 +71,9 @@ describe('Stage 5 & God-Mode: Safe Desktop Actions & Windows Automation', () => 
       expect(sanitizeAndValidateUrl('http://news.ycombinator.com')).toBe(
         'http://news.ycombinator.com/',
       );
+      expect(sanitizeAndValidateUrl('ms-settings:display')).toBe(
+        'ms-settings:display',
+      );
     });
 
     it('rejects unsafe protocols and malicious schemas', () => {
@@ -275,6 +278,11 @@ describe('Stage 5 & God-Mode: Safe Desktop Actions & Windows Automation', () => 
       const brightnessIntent = detectDirectIntent('set brightness to 70%');
       expect(brightnessIntent?.toolId).toBe('brightness_control');
       expect(brightnessIntent?.args.level).toBe(70);
+
+      const dimIntent = detectDirectIntent('dim my brightness');
+      expect(dimIntent?.toolId).toBe('brightness_control');
+      expect(dimIntent?.args.action).toBe('set');
+      expect(dimIntent?.args.level).toBe(35);
 
       const ytIntent = detectDirectIntent('search youtube for Iron Man');
       expect(ytIntent?.toolId).toBe('direct_search');
