@@ -17,6 +17,11 @@ import {
 import { getNetworkDiagnostics } from './networkTools';
 import { lockWorkstation } from './systemControlTools';
 import { capturePrimaryScreen } from './screenCaptureTool';
+import { writeToClipboard, readFromClipboard } from './clipboardTools';
+import { getDisplayBrightness, setDisplayBrightness } from './brightnessTools';
+import { closeApprovedApp } from './appCloser';
+import { executeDirectSearch, type SearchPlatform } from './directSearchTools';
+import { addQuickNote, readQuickNotes } from './noteTools';
 
 export class ToolRegistry {
   private tools = new Map<string, ToolDefinition<any>>();
@@ -169,6 +174,92 @@ export class ToolRegistry {
         return await capturePrimaryScreen();
       },
     });
+
+    // 11. Clipboard Control
+    this.registerTool({
+      id: 'clipboard_control',
+      name: 'Clipboard Control',
+      description:
+        'Reads text from or copies text into the Windows system clipboard.',
+      permission: 'low_risk',
+      schema: z.object({
+        action: z.enum(['read', 'write']),
+        text: z.string().optional(),
+      }),
+      execute: async (args: { action: 'read' | 'write'; text?: string }) => {
+        if (args.action === 'write') {
+          return await writeToClipboard(args.text || '');
+        }
+        return await readFromClipboard();
+      },
+    });
+
+    // 12. Display Brightness Control
+    this.registerTool({
+      id: 'brightness_control',
+      name: 'Display Brightness Control',
+      description: 'Queries or adjusts monitor screen brightness.',
+      permission: 'low_risk',
+      schema: z.object({
+        action: z.enum(['get', 'set']),
+        level: z.number().min(0).max(100).optional(),
+      }),
+      execute: async (args: { action: 'get' | 'set'; level?: number }) => {
+        if (args.action === 'set') {
+          return await setDisplayBrightness(args.level ?? 80);
+        }
+        return await getDisplayBrightness();
+      },
+    });
+
+    // 13. Close Application
+    this.registerTool({
+      id: 'close_app',
+      name: 'Close Application',
+      description: 'Gracefully closes an approved desktop application.',
+      permission: 'low_risk',
+      schema: z.object({
+        app: z.string().min(1, 'Application name is required'),
+      }),
+      execute: async (args: { app: string }) => {
+        return await closeApprovedApp(args.app);
+      },
+    });
+
+    // 14. Direct Search
+    this.registerTool({
+      id: 'direct_search',
+      name: 'Direct Platform Search',
+      description:
+        'Launches search queries directly on YouTube, GitHub, or Google.',
+      permission: 'low_risk',
+      schema: z.object({
+        platform: z.enum(['youtube', 'github', 'google']),
+        query: z.string().min(1, 'Query is required'),
+      }),
+      execute: async (args: { platform: SearchPlatform; query: string }) => {
+        return await executeDirectSearch(args.platform, args.query);
+      },
+    });
+
+    // 15. Quick Desktop Memo / Notes
+    this.registerTool({
+      id: 'quick_note',
+      name: 'Quick Desktop Memo',
+      description:
+        'Archives quick notes to or reads from Desktop/JARVIS_Notes.md.',
+      permission: 'low_risk',
+      schema: z.object({
+        action: z.enum(['add', 'read']),
+        content: z.string().optional(),
+      }),
+      execute: async (args: { action: 'add' | 'read'; content?: string }) => {
+        if (args.action === 'add') {
+          return await addQuickNote(args.content || '');
+        }
+        return await readQuickNotes();
+      },
+    });
   }
 
   public registerTool<T>(tool: ToolDefinition<T>): void {
@@ -281,35 +372,45 @@ You have access to safe, sandboxed desktop tools. When the user requests an acti
 1. open_app: Launch an approved desktop app (spotify, chrome, edge, vscode, notepad, calculator, terminal, powershell, explorer, settings, taskmanager).
    - [ACTION: open_app {"app": "spotify"}]
 
-2. open_url: Open a web URL.
+2. close_app: Close an approved desktop app.
+   - [ACTION: close_app {"app": "calculator"}]
+
+3. open_url: Open a web URL.
    - [ACTION: open_url {"url": "https://github.com"}]
 
-3. system_diagnostics: Check battery %, RAM usage, CPU model, and uptime.
+4. system_diagnostics: Check battery %, RAM usage, CPU model, and uptime.
    - [ACTION: system_diagnostics {}]
 
-4. volume_control: Adjust or mute system volume.
-   - Actions: "mute" | "unmute" | "up" | "down" | "set"
+5. volume_control: Adjust or mute system volume ("mute" | "unmute" | "up" | "down" | "set").
    - [ACTION: volume_control {"action": "mute"}]
    - [ACTION: volume_control {"action": "set", "level": 50}]
 
-5. media_control: Control media playback.
-   - Actions: "play_pause" | "next" | "previous" | "stop"
+6. brightness_control: Adjust or query monitor brightness ("get" | "set").
+   - [ACTION: brightness_control {"action": "set", "level": 70}]
+   - [ACTION: brightness_control {"action": "get"}]
+
+7. media_control: Control media playback ("play_pause" | "next" | "previous" | "stop").
    - [ACTION: media_control {"action": "next"}]
 
-6. network_diagnostics: Check Wi-Fi SSID, internet ping latency, and connection.
+8. network_diagnostics: Check Wi-Fi SSID, internet ping latency, and connection.
    - [ACTION: network_diagnostics {}]
 
-7. capture_screen: Take a full screenshot and save to Desktop.
+9. capture_screen: Take a full screenshot and save to Desktop.
    - [ACTION: capture_screen {}]
 
-8. lock_workstation: Lock Windows workstation.
-   - [ACTION: lock_workstation {}]
+10. lock_workstation: Lock Windows workstation.
+    - [ACTION: lock_workstation {}]
 
-9. read_file: Read a text file from approved folders.
-   - [ACTION: read_file {"filePath": "notes.txt"}]
+11. clipboard_control: Read or write to Windows clipboard ("read" | "write").
+    - [ACTION: clipboard_control {"action": "write", "text": "Hello world"}]
+    - [ACTION: clipboard_control {"action": "read"}]
 
-10. write_file: Save a file (.txt, .md, .json, .csv, .log).
-    - [ACTION: write_file {"filePath": "memo.txt", "content": "Meeting notes"}]`;
+12. direct_search: Search YouTube, GitHub, or Google.
+    - [ACTION: direct_search {"platform": "youtube", "query": "Iron Man"}]
+
+13. quick_note: Add or read quick notes on Desktop.
+    - [ACTION: quick_note {"action": "add", "content": "Meeting at 4pm"}]
+    - [ACTION: quick_note {"action": "read"}]`;
   }
 }
 

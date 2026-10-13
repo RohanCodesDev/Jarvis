@@ -17,7 +17,8 @@ export interface ParsedDirectiveResult {
  */
 export function detectDirectIntent(input: string): DetectedAction | null {
   if (!input) return null;
-  const clean = input.trim().toLowerCase();
+  const clean = input.trim();
+  const lower = clean.toLowerCase();
 
   // 1. Screen Capture
   const screenshotTriggers = [
@@ -28,7 +29,7 @@ export function detectDirectIntent(input: string): DetectedAction | null {
     'capture display',
     'screen capture',
   ];
-  if (screenshotTriggers.some((t) => clean.includes(t))) {
+  if (screenshotTriggers.some((t) => lower.includes(t))) {
     return {
       toolId: 'capture_screen',
       args: {},
@@ -45,7 +46,7 @@ export function detectDirectIntent(input: string): DetectedAction | null {
     'lock screen',
     'lock windows',
   ];
-  if (lockTriggers.some((t) => clean.includes(t))) {
+  if (lockTriggers.some((t) => lower.includes(t))) {
     return {
       toolId: 'lock_workstation',
       args: {},
@@ -63,7 +64,7 @@ export function detectDirectIntent(input: string): DetectedAction | null {
     'ping check',
     'check connection',
   ];
-  if (netTriggers.some((t) => clean.includes(t))) {
+  if (netTriggers.some((t) => lower.includes(t))) {
     return {
       toolId: 'network_diagnostics',
       args: {},
@@ -71,12 +72,146 @@ export function detectDirectIntent(input: string): DetectedAction | null {
     };
   }
 
-  // 4. Volume Control
+  // 4. Clipboard Controls
   if (
-    clean === 'mute' ||
-    clean.includes('mute audio') ||
-    clean.includes('mute volume') ||
-    clean.includes('mute sound')
+    lower === 'read clipboard' ||
+    lower.includes('check clipboard') ||
+    lower.includes('what is on my clipboard') ||
+    lower.includes("what's on my clipboard") ||
+    lower.includes('read my clipboard')
+  ) {
+    return {
+      toolId: 'clipboard_control',
+      args: { action: 'read' },
+      confidence: 'high',
+    };
+  }
+  const copyMatch = clean.match(
+    /(?:copy to clipboard[:\s]+|copy this to clipboard[:\s]+)(.+)/i,
+  );
+  if (copyMatch && copyMatch[1]) {
+    return {
+      toolId: 'clipboard_control',
+      args: { action: 'write', text: copyMatch[1].trim() },
+      confidence: 'high',
+    };
+  }
+
+  // 5. Display Brightness Controls
+  if (
+    lower.includes('check brightness') ||
+    lower.includes('what is my brightness') ||
+    lower === 'brightness'
+  ) {
+    return {
+      toolId: 'brightness_control',
+      args: { action: 'get' },
+      confidence: 'high',
+    };
+  }
+  if (lower.includes('dim screen') || lower.includes('dim display')) {
+    return {
+      toolId: 'brightness_control',
+      args: { action: 'set', level: 35 },
+      confidence: 'high',
+    };
+  }
+  if (lower.includes('max brightness') || lower.includes('full brightness')) {
+    return {
+      toolId: 'brightness_control',
+      args: { action: 'set', level: 100 },
+      confidence: 'high',
+    };
+  }
+  const brightnessMatch = lower.match(
+    /(?:set brightness to|brightness to|brightness)\s*(\d{1,3})%?/i,
+  );
+  if (brightnessMatch && brightnessMatch[1]) {
+    const level = parseInt(brightnessMatch[1], 10);
+    if (!isNaN(level)) {
+      return {
+        toolId: 'brightness_control',
+        args: { action: 'set', level },
+        confidence: 'high',
+      };
+    }
+  }
+
+  // 6. Direct Platform Searches (YouTube, GitHub, Google)
+  const ytMatch = clean.match(
+    /(?:search youtube for|find on youtube|search yt for)\s+(.+)/i,
+  );
+  if (ytMatch && ytMatch[1]) {
+    return {
+      toolId: 'direct_search',
+      args: { platform: 'youtube', query: ytMatch[1].trim() },
+      confidence: 'high',
+    };
+  }
+  const ghMatch = clean.match(/(?:search github for|find on github)\s+(.+)/i);
+  if (ghMatch && ghMatch[1]) {
+    return {
+      toolId: 'direct_search',
+      args: { platform: 'github', query: ghMatch[1].trim() },
+      confidence: 'high',
+    };
+  }
+  const googleMatch = clean.match(
+    /(?:search google for|google for|look up on google)\s+(.+)/i,
+  );
+  if (googleMatch && googleMatch[1]) {
+    return {
+      toolId: 'direct_search',
+      args: { platform: 'google', query: googleMatch[1].trim() },
+      confidence: 'high',
+    };
+  }
+
+  // 7. Quick Notes / Memos
+  if (
+    lower === 'read notes' ||
+    lower.includes('read my notes') ||
+    lower.includes('check notes')
+  ) {
+    return {
+      toolId: 'quick_note',
+      args: { action: 'read' },
+      confidence: 'high',
+    };
+  }
+  const noteMatch = clean.match(
+    /(?:take a note[:\s]+|take note[:\s]+|note[:\s]+|save note[:\s]+)(.+)/i,
+  );
+  if (noteMatch && noteMatch[1]) {
+    return {
+      toolId: 'quick_note',
+      args: { action: 'add', content: noteMatch[1].trim() },
+      confidence: 'high',
+    };
+  }
+
+  // 8. Close Application (e.g. "close spotify", "exit chrome", "close calculator")
+  const closePrefixRegex =
+    /^(?:close|exit|terminate|kill|quit)\s+([a-z0-9\s]+)$/i;
+  const closeMatch = lower.match(closePrefixRegex);
+  if (closeMatch && closeMatch[1]) {
+    const candidateName = closeMatch[1].trim();
+    const matchedApp = findApprovedApp(candidateName);
+    if (matchedApp) {
+      return {
+        toolId: 'close_app',
+        args: { app: matchedApp.id },
+        confidence: 'high',
+      };
+    }
+  }
+
+  // 9. Volume Control
+  if (
+    lower === 'mute' ||
+    lower.includes('mute audio') ||
+    lower.includes('mute volume') ||
+    lower.includes('mute sound')
   ) {
     return {
       toolId: 'volume_control',
@@ -85,9 +220,9 @@ export function detectDirectIntent(input: string): DetectedAction | null {
     };
   }
   if (
-    clean === 'unmute' ||
-    clean.includes('unmute audio') ||
-    clean.includes('unmute volume')
+    lower === 'unmute' ||
+    lower.includes('unmute audio') ||
+    lower.includes('unmute volume')
   ) {
     return {
       toolId: 'volume_control',
@@ -96,9 +231,9 @@ export function detectDirectIntent(input: string): DetectedAction | null {
     };
   }
   if (
-    clean.includes('volume up') ||
-    clean.includes('increase volume') ||
-    clean === 'louder'
+    lower.includes('volume up') ||
+    lower.includes('increase volume') ||
+    lower === 'louder'
   ) {
     return {
       toolId: 'volume_control',
@@ -107,9 +242,9 @@ export function detectDirectIntent(input: string): DetectedAction | null {
     };
   }
   if (
-    clean.includes('volume down') ||
-    clean.includes('decrease volume') ||
-    clean === 'quieter'
+    lower.includes('volume down') ||
+    lower.includes('decrease volume') ||
+    lower === 'quieter'
   ) {
     return {
       toolId: 'volume_control',
@@ -117,7 +252,7 @@ export function detectDirectIntent(input: string): DetectedAction | null {
       confidence: 'high',
     };
   }
-  const setVolumeMatch = clean.match(
+  const setVolumeMatch = lower.match(
     /(?:set volume to|volume to|set volume)\s*(\d{1,3})%?/i,
   );
   if (setVolumeMatch && setVolumeMatch[1]) {
@@ -131,14 +266,14 @@ export function detectDirectIntent(input: string): DetectedAction | null {
     }
   }
 
-  // 5. Media Playback Control
+  // 10. Media Playback Control
   const mediaPauseTriggers = [
     'pause music',
     'pause song',
     'stop music',
     'pause playback',
   ];
-  if (mediaPauseTriggers.some((t) => clean.includes(t))) {
+  if (mediaPauseTriggers.some((t) => lower.includes(t))) {
     return {
       toolId: 'media_control',
       args: { action: 'play_pause' },
@@ -151,7 +286,7 @@ export function detectDirectIntent(input: string): DetectedAction | null {
     'resume playback',
     'unpause music',
   ];
-  if (mediaPlayTriggers.some((t) => clean.includes(t))) {
+  if (mediaPlayTriggers.some((t) => lower.includes(t))) {
     return {
       toolId: 'media_control',
       args: { action: 'play_pause' },
@@ -164,7 +299,7 @@ export function detectDirectIntent(input: string): DetectedAction | null {
     'skip song',
     'skip track',
   ];
-  if (mediaNextTriggers.some((t) => clean.includes(t))) {
+  if (mediaNextTriggers.some((t) => lower.includes(t))) {
     return {
       toolId: 'media_control',
       args: { action: 'next' },
@@ -172,7 +307,7 @@ export function detectDirectIntent(input: string): DetectedAction | null {
     };
   }
   const mediaPrevTriggers = ['previous song', 'previous track', 'last song'];
-  if (mediaPrevTriggers.some((t) => clean.includes(t))) {
+  if (mediaPrevTriggers.some((t) => lower.includes(t))) {
     return {
       toolId: 'media_control',
       args: { action: 'previous' },
@@ -180,7 +315,7 @@ export function detectDirectIntent(input: string): DetectedAction | null {
     };
   }
 
-  // 6. Battery & Hardware Telemetry
+  // 11. Battery & Hardware Telemetry
   const batteryTriggers = [
     'check battery',
     'battery status',
@@ -192,7 +327,7 @@ export function detectDirectIntent(input: string): DetectedAction | null {
     'ram usage',
     'system status',
   ];
-  if (batteryTriggers.some((t) => clean.includes(t))) {
+  if (batteryTriggers.some((t) => lower.includes(t))) {
     return {
       toolId: 'system_diagnostics',
       args: {},
@@ -200,10 +335,10 @@ export function detectDirectIntent(input: string): DetectedAction | null {
     };
   }
 
-  // 7. Direct Web URL launcher (e.g. "open https://...", "go to youtube.com")
+  // 12. Direct Web URL launcher (e.g. "open https://...", "go to youtube.com")
   const urlRegex =
     /(?:open|go to|navigate to|browse to)\s+(https?:\/\/[^\s]+|[a-z0-9-]+\.(?:com|org|net|io|edu|gov|dev)[^\s]*)/i;
-  const urlMatch = clean.match(urlRegex);
+  const urlMatch = lower.match(urlRegex);
   if (urlMatch && urlMatch[1]) {
     return {
       toolId: 'open_url',
@@ -212,9 +347,9 @@ export function detectDirectIntent(input: string): DetectedAction | null {
     };
   }
 
-  // 8. Open Application (e.g. "open spotify", "launch visual studio code", "start calc")
+  // 13. Open Application (e.g. "open spotify", "launch visual studio code", "start calc")
   const appPrefixRegex = /^(?:open|launch|start|run|play)\s+([a-z0-9\s]+)$/i;
-  const appMatch = clean.match(appPrefixRegex);
+  const appMatch = lower.match(appPrefixRegex);
   if (appMatch && appMatch[1]) {
     const candidateName = appMatch[1].trim();
     const matchedApp = findApprovedApp(candidateName);

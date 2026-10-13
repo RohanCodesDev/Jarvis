@@ -18,6 +18,17 @@ import { getNetworkDiagnostics } from '../src/services/tools/networkTools';
 import { lockWorkstation } from '../src/services/tools/systemControlTools';
 import { capturePrimaryScreen } from '../src/services/tools/screenCaptureTool';
 import {
+  writeToClipboard,
+  readFromClipboard,
+} from '../src/services/tools/clipboardTools';
+import {
+  getDisplayBrightness,
+  setDisplayBrightness,
+} from '../src/services/tools/brightnessTools';
+import { closeApprovedApp } from '../src/services/tools/appCloser';
+import { executeDirectSearch } from '../src/services/tools/directSearchTools';
+import { addQuickNote, readQuickNotes } from '../src/services/tools/noteTools';
+import {
   detectDirectIntent,
   parseModelDirectives,
 } from '../src/services/tools/intentDetector';
@@ -130,6 +141,55 @@ describe('Stage 5 & God-Mode: Safe Desktop Actions & Windows Automation', () => 
     });
   });
 
+  describe('God-Mode Additions: Clipboard, Brightness, Close App, Direct Search, Quick Notes', () => {
+    it('handles clipboard write and read operations safely', async () => {
+      const writeRes = await writeToClipboard('Directive 42');
+      expect(writeRes.success).toBe(true);
+
+      const readRes = await readFromClipboard();
+      expect(readRes.success).toBe(true);
+      expect((readRes.data as any).text).toBeDefined();
+    });
+
+    it('queries and sets display brightness', async () => {
+      const getRes = await getDisplayBrightness();
+      expect(getRes.success).toBe(true);
+      expect((getRes.data as any).brightness).toBeDefined();
+
+      const setRes = await setDisplayBrightness(75);
+      expect(setRes.success).toBe(true);
+      expect(setRes.message).toContain('75%');
+    });
+
+    it('closes approved applications safely', async () => {
+      const closeRes = await closeApprovedApp('calc');
+      expect(closeRes.success).toBe(true);
+      expect(closeRes.message).toContain('Calculator');
+
+      const disallowRes = await closeApprovedApp('unknown_malicious_proc');
+      expect(disallowRes.success).toBe(false);
+      expect(disallowRes.message).toContain('Access denied');
+    });
+
+    it('executes direct platform searches', async () => {
+      const ytRes = await executeDirectSearch('youtube', 'Stark Industries');
+      expect(ytRes.success).toBe(true);
+      expect((ytRes.data as any).url).toContain('youtube.com');
+
+      const ghRes = await executeDirectSearch('github', 'electron');
+      expect(ghRes.success).toBe(true);
+      expect((ghRes.data as any).url).toContain('github.com');
+    });
+
+    it('archives and reads quick desktop notes', async () => {
+      const addRes = await addQuickNote('Review Mark-85 schematics');
+      expect(addRes.success).toBe(true);
+
+      const readRes = await readQuickNotes();
+      expect(readRes.success).toBe(true);
+    });
+  });
+
   describe('Sandboxed File Operations', () => {
     const testDir = path.join(os.homedir(), 'Desktop', 'jarvis_test_sandbox');
     const testFile = path.join(testDir, 'test_note.txt');
@@ -198,6 +258,32 @@ describe('Stage 5 & God-Mode: Safe Desktop Actions & Windows Automation', () => 
         confidence: 'high',
       });
 
+      const closeCalcIntent = detectDirectIntent('close calculator');
+      expect(closeCalcIntent?.toolId).toBe('close_app');
+      expect(closeCalcIntent?.args.app).toBe('calculator');
+
+      const copyIntent = detectDirectIntent(
+        'copy to clipboard: Project Falcon',
+      );
+      expect(copyIntent?.toolId).toBe('clipboard_control');
+      expect(copyIntent?.args.text).toBe('Project Falcon');
+
+      const readClipIntent = detectDirectIntent('read my clipboard');
+      expect(readClipIntent?.toolId).toBe('clipboard_control');
+      expect(readClipIntent?.args.action).toBe('read');
+
+      const brightnessIntent = detectDirectIntent('set brightness to 70%');
+      expect(brightnessIntent?.toolId).toBe('brightness_control');
+      expect(brightnessIntent?.args.level).toBe(70);
+
+      const ytIntent = detectDirectIntent('search youtube for Iron Man');
+      expect(ytIntent?.toolId).toBe('direct_search');
+      expect(ytIntent?.args.platform).toBe('youtube');
+
+      const noteIntent = detectDirectIntent('take a note: Call Tony at 5');
+      expect(noteIntent?.toolId).toBe('quick_note');
+      expect(noteIntent?.args.content).toBe('Call Tony at 5');
+
       const screenshotIntent = detectDirectIntent('take a screenshot');
       expect(screenshotIntent?.toolId).toBe('capture_screen');
 
@@ -219,10 +305,6 @@ describe('Stage 5 & God-Mode: Safe Desktop Actions & Windows Automation', () => 
 
       const lockIntent = detectDirectIntent('lock workstation');
       expect(lockIntent?.toolId).toBe('lock_workstation');
-
-      const calcIntent = detectDirectIntent('launch calc');
-      expect(calcIntent?.toolId).toBe('open_app');
-      expect(calcIntent?.args.app).toBe('calculator');
     });
 
     it('parses [ACTION: toolId {args}] model directives and cleans response text', () => {
@@ -244,10 +326,11 @@ describe('Stage 5 & God-Mode: Safe Desktop Actions & Windows Automation', () => 
       registry = new ToolRegistry();
     });
 
-    it('lists all default registered tools including God-Mode tools', () => {
+    it('lists all registered tools including all God-Mode tools', () => {
       const tools = registry.getAllTools();
       const toolIds = tools.map((t) => t.id);
       expect(toolIds).toContain('open_app');
+      expect(toolIds).toContain('close_app');
       expect(toolIds).toContain('open_url');
       expect(toolIds).toContain('system_diagnostics');
       expect(toolIds).toContain('read_file');
@@ -257,6 +340,10 @@ describe('Stage 5 & God-Mode: Safe Desktop Actions & Windows Automation', () => 
       expect(toolIds).toContain('network_diagnostics');
       expect(toolIds).toContain('lock_workstation');
       expect(toolIds).toContain('capture_screen');
+      expect(toolIds).toContain('clipboard_control');
+      expect(toolIds).toContain('brightness_control');
+      expect(toolIds).toContain('direct_search');
+      expect(toolIds).toContain('quick_note');
     });
 
     it('validates tool arguments with Zod schemas and executes successfully', async () => {
