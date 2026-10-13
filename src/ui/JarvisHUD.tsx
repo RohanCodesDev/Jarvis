@@ -175,6 +175,48 @@ export const JarvisHUD: React.FC = () => {
         .catch(() => {});
     }
 
+    if (window.jarvisDesktop?.getMemories) {
+      window.jarvisDesktop
+        .getMemories()
+        .then((dbMemories) => {
+          if (dbMemories && dbMemories.length > 0) {
+            setMemories(dbMemories);
+            addActivity(
+              'success',
+              'system',
+              `Neon DB memory banks loaded (${dbMemories.length} records).`,
+            );
+          }
+        })
+        .catch(() => {});
+    }
+
+    if (window.jarvisDesktop?.getChatHistory) {
+      window.jarvisDesktop
+        .getChatHistory('main', 40)
+        .then((dbHistory) => {
+          if (dbHistory && dbHistory.length > 0) {
+            setMessages(dbHistory);
+          }
+        })
+        .catch(() => {});
+    }
+
+    if (window.jarvisDesktop?.getDbStatus) {
+      window.jarvisDesktop
+        .getDbStatus()
+        .then((status) => {
+          if (status.isConnected) {
+            addActivity(
+              'success',
+              'system',
+              'Neon PostgreSQL persistent storage active.',
+            );
+          }
+        })
+        .catch(() => {});
+    }
+
     if (window.jarvisDesktop?.onActivityEvent) {
       const unsub = window.jarvisDesktop.onActivityEvent((act) => {
         setActivities((prev) => [...prev.slice(-25), act]);
@@ -646,15 +688,21 @@ export const JarvisHUD: React.FC = () => {
       createdAt: new Date().toLocaleString(),
     };
     setMemories((prev) => [item, ...prev]);
+    if (window.jarvisDesktop?.addMemory) {
+      window.jarvisDesktop.addMemory(item).catch(() => {});
+    }
     addActivity(
       'info',
       'system',
-      `Memory banked: "${content.substring(0, 20)}..."`,
+      `Memory banked to Neon DB: "${content.substring(0, 20)}..."`,
     );
   };
 
   const handleDeleteMemory = (id: string) => {
     setMemories((prev) => prev.filter((m) => m.id !== id));
+    if (window.jarvisDesktop?.deleteMemory) {
+      window.jarvisDesktop.deleteMemory(id).catch(() => {});
+    }
     addActivity('info', 'system', `Purged memory ID ${id}`);
   };
 
@@ -662,6 +710,9 @@ export const JarvisHUD: React.FC = () => {
     setMemories((prev) =>
       prev.map((m) => (m.id === id ? { ...m, content: newContent } : m)),
     );
+    if (window.jarvisDesktop?.updateMemory) {
+      window.jarvisDesktop.updateMemory(id, newContent).catch(() => {});
+    }
     addActivity('info', 'system', `Updated memory ID ${id}`);
   };
 
@@ -763,7 +814,12 @@ export const JarvisHUD: React.FC = () => {
         onClose={() => setDrawerOpen(false)}
         messages={messages}
         activities={activities}
-        onClearMessages={() => setMessages([])}
+        onClearMessages={() => {
+          setMessages([]);
+          if (window.jarvisDesktop?.clearChatHistory) {
+            window.jarvisDesktop.clearChatHistory('main').catch(() => {});
+          }
+        }}
       />
 
       {/* 5. Modals */}

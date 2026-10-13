@@ -85,6 +85,34 @@ const desktopAPI: DesktopBridgeAPI = {
   transcribeAudio: async (params) => {
     return ipcRenderer.invoke('desktop:transcribeAudio', params);
   },
+  getMemories: async () => {
+    return ipcRenderer.invoke('desktop:getMemories');
+  },
+  addMemory: async (item) => {
+    return ipcRenderer.invoke('desktop:addMemory', item);
+  },
+  updateMemory: async (id, content) => {
+    return ipcRenderer.invoke('desktop:updateMemory', id, content);
+  },
+  deleteMemory: async (id) => {
+    return ipcRenderer.invoke('desktop:deleteMemory', id);
+  },
+  getChatHistory: async (conversationId, limit) => {
+    return ipcRenderer.invoke('desktop:getChatHistory', conversationId, limit);
+  },
+  saveChatMessage: async (message, conversationId) => {
+    return ipcRenderer.invoke(
+      'desktop:saveChatMessage',
+      message,
+      conversationId,
+    );
+  },
+  clearChatHistory: async (conversationId) => {
+    return ipcRenderer.invoke('desktop:clearChatHistory', conversationId);
+  },
+  getDbStatus: async () => {
+    return ipcRenderer.invoke('desktop:getDbStatus');
+  },
 };
 
 contextBridge.exposeInMainWorld('jarvisDesktop', desktopAPI);

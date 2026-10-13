@@ -33,6 +33,7 @@ import {
   searchWeb,
   buildSearchAugmentationPrompt,
 } from './services/search/webSearchService';
+import { databaseService } from './services/db/databaseService';
 
 function setupIpcHandlers() {
   ipcMain.handle('desktop:getSystemInfo', async (event) => {
@@ -259,6 +260,29 @@ function setupIpcHandlers() {
       }
     }
 
+    // Inject long-term user memories into AI reasoning context
+    try {
+      const memoryContext = await databaseService.formatMemoriesForPrompt();
+      if (memoryContext) {
+        searchContext = searchContext
+          ? `${searchContext}\n\n${memoryContext}`
+          : memoryContext;
+      }
+    } catch (memErr) {
+      console.warn('[Main] Failed to load memory context:', memErr);
+    }
+
+    // Archive user directive to persistent database
+    databaseService
+      .saveChatMessage({
+        id: 'msg-u-' + Date.now(),
+        sender: 'user',
+        text: data.message,
+        timestamp: new Date().toLocaleTimeString('en-US', { hour12: false }),
+        status: 'delivered',
+      })
+      .catch(() => {});
+
     aiManager.streamChat(
       data.streamId,
       {
@@ -284,6 +308,21 @@ function setupIpcHandlers() {
             metadata,
           });
         }
+        // Archive assistant response to persistent database
+        databaseService
+          .saveChatMessage({
+            id: 'msg-j-' + Date.now(),
+            sender: 'jarvis',
+            text: fullResponse,
+            timestamp: new Date().toLocaleTimeString('en-US', {
+              hour12: false,
+            }),
+            status: 'delivered',
+            metadata: {
+              modelUsed: metadata?.model,
+            },
+          })
+          .catch(() => {});
       },
       (error) => {
         if (!event.sender.isDestroyed()) {
@@ -311,6 +350,81 @@ function setupIpcHandlers() {
       return { text: '', source: 'mock', error: 'Audio data is empty' };
     }
     return whisperTranscriber.transcribe(data);
+  });
+
+  // Stage 4: Persistent Memory & Knowledge Banks (Neon PostgreSQL)
+  ipcMain.handle('desktop:getMemories', async (event) => {
+    if (!isValidSender(event)) throw new Error('Unauthorized IPC sender');
+    return databaseService.getMemories();
+  });
+
+  ipcMain.handle('desktop:addMemory', async (event, payload: unknown) => {
+    if (!isValidSender(event)) throw new Error('Unauthorized IPC sender');
+    if (typeof payload !== 'object' || payload === null) {
+      return { success: false, error: 'Invalid memory payload' };
+    }
+    return databaseService.addMemory(
+      payload as import('./types/hud').UserMemoryItem,
+    );
+  });
+
+  ipcMain.handle(
+    'desktop:updateMemory',
+    async (event, id: unknown, content: unknown) => {
+      if (!isValidSender(event)) throw new Error('Unauthorized IPC sender');
+      if (typeof id !== 'string' || typeof content !== 'string') {
+        return { success: false, error: 'Invalid arguments' };
+      }
+      return databaseService.updateMemory(id, content);
+    },
+  );
+
+  ipcMain.handle('desktop:deleteMemory', async (event, id: unknown) => {
+    if (!isValidSender(event)) throw new Error('Unauthorized IPC sender');
+    if (typeof id !== 'string') {
+      return { success: false, error: 'Invalid memory ID' };
+    }
+    return databaseService.deleteMemory(id);
+  });
+
+  ipcMain.handle(
+    'desktop:getChatHistory',
+    async (event, conversationId?: unknown, limit?: unknown) => {
+      if (!isValidSender(event)) throw new Error('Unauthorized IPC sender');
+      return databaseService.getChatHistory(
+        typeof conversationId === 'string' ? conversationId : undefined,
+        typeof limit === 'number' ? limit : undefined,
+      );
+    },
+  );
+
+  ipcMain.handle(
+    'desktop:saveChatMessage',
+    async (event, message: unknown, conversationId?: unknown) => {
+      if (!isValidSender(event)) throw new Error('Unauthorized IPC sender');
+      if (typeof message !== 'object' || message === null) {
+        return { success: false };
+      }
+      return databaseService.saveChatMessage(
+        message as import('./types/hud').ChatMessage,
+        typeof conversationId === 'string' ? conversationId : undefined,
+      );
+    },
+  );
+
+  ipcMain.handle(
+    'desktop:clearChatHistory',
+    async (event, conversationId?: unknown) => {
+      if (!isValidSender(event)) throw new Error('Unauthorized IPC sender');
+      return databaseService.clearChatHistory(
+        typeof conversationId === 'string' ? conversationId : undefined,
+      );
+    },
+  );
+
+  ipcMain.handle('desktop:getDbStatus', async (event) => {
+    if (!isValidSender(event)) throw new Error('Unauthorized IPC sender');
+    return databaseService.getStatus();
   });
 }
 
@@ -373,6 +487,9 @@ const createWindow = () => {
 
 app.whenReady().then(() => {
   setupIpcHandlers();
+  databaseService.initialize().catch((err) => {
+    console.warn('[Main] Database initialization deferred:', err);
+  });
   createWindow();
 
   app.on('activate', () => {

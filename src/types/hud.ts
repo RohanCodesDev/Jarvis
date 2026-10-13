@@ -114,6 +114,26 @@ export interface DesktopBridgeAPI {
     base64Audio: string;
     format?: string;
   }) => Promise<{ text: string; source: 'whisper' | 'mock'; error?: string }>;
+  // Stage 4: Persistent Memory & Knowledge Banks
+  getMemories: () => Promise<UserMemoryItem[]>;
+  addMemory: (
+    item: UserMemoryItem,
+  ) => Promise<{ success: boolean; error?: string }>;
+  updateMemory: (
+    id: string,
+    content: string,
+  ) => Promise<{ success: boolean; error?: string }>;
+  deleteMemory: (id: string) => Promise<{ success: boolean; error?: string }>;
+  getChatHistory: (
+    conversationId?: string,
+    limit?: number,
+  ) => Promise<ChatMessage[]>;
+  saveChatMessage: (
+    message: ChatMessage,
+    conversationId?: string,
+  ) => Promise<{ success: boolean }>;
+  clearChatHistory: (conversationId?: string) => Promise<{ success: boolean }>;
+  getDbStatus: () => Promise<{ isConnected: boolean; error?: string }>;
 }
 
 declare global {

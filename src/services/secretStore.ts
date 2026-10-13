@@ -122,3 +122,51 @@ export function deleteGroqKey(): boolean {
   }
   return false;
 }
+
+export const DEFAULT_NEON_DB_URI =
+  'postgresql://neondb_owner:npg_M8ZaGh6FdDeq@ep-autumn-bread-b4bsip4f-pooler.c-6.us-east-2.aws.neon.tech/neondb?sslmode=require';
+
+function getDbUriPath(): string {
+  const userData = app?.getPath ? app.getPath('userData') : process.cwd();
+  return path.join(userData, 'jarvis-db-uri.bin');
+}
+
+export function storeDbUri(uri: string): boolean {
+  if (!safeStorage.isEncryptionAvailable()) {
+    console.warn('[SecretStore] OS safeStorage encryption unavailable');
+    return false;
+  }
+  const trimmed = (uri || '').trim();
+  if (!trimmed) return false;
+  const encrypted = safeStorage.encryptString(trimmed);
+  fs.writeFileSync(getDbUriPath(), encrypted);
+  return true;
+}
+
+export function getDbUri(): string {
+  const filePath = getDbUriPath();
+  if (!fs.existsSync(filePath)) return DEFAULT_NEON_DB_URI;
+  if (!safeStorage.isEncryptionAvailable()) return DEFAULT_NEON_DB_URI;
+  try {
+    const encrypted = fs.readFileSync(filePath);
+    const decrypted = safeStorage.decryptString(encrypted).trim();
+    return decrypted || DEFAULT_NEON_DB_URI;
+  } catch (err) {
+    console.error('[SecretStore] Failed to decrypt DB URI:', err);
+    return DEFAULT_NEON_DB_URI;
+  }
+}
+
+export function hasCustomDbUri(): boolean {
+  const filePath = getDbUriPath();
+  return fs.existsSync(filePath);
+}
+
+export function deleteDbUri(): boolean {
+  const filePath = getDbUriPath();
+  if (fs.existsSync(filePath)) {
+    fs.unlinkSync(filePath);
+    return true;
+  }
+  return false;
+}
