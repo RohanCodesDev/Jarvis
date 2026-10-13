@@ -632,6 +632,27 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 />
                 <span>HUD Sound Effects</span>
               </label>
+              <label
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  cursor: 'pointer',
+                  fontSize: '13px',
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={formData.wakeWordEnabled !== false}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      wakeWordEnabled: e.target.checked,
+                    })
+                  }
+                />
+                <span>Hands-Free Wake-Word ("Hey Jarvis")</span>
+              </label>
             </div>
           </div>
 

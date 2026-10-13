@@ -334,8 +334,9 @@ const createWindow = () => {
 
   mainWindow.webContents.session.setPermissionRequestHandler(
     (webContents, permission, callback) => {
+      const allowed = ['media', 'audio-capture', 'speech'];
       if (
-        permission === 'media' &&
+        allowed.includes(permission) &&
         mainWindow &&
         webContents.id === mainWindow.webContents.id
       ) {
@@ -343,6 +344,18 @@ const createWindow = () => {
         return;
       }
       callback(false);
+    },
+  );
+
+  mainWindow.webContents.session.setPermissionCheckHandler(
+    (webContents, permission) => {
+      const allowed = ['media', 'audio-capture', 'speech'];
+      return (
+        allowed.includes(permission) &&
+        mainWindow !== null &&
+        webContents !== null &&
+        webContents.id === mainWindow.webContents.id
+      );
     },
   );
 

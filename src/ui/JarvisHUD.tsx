@@ -20,12 +20,14 @@ import { CommsDrawer } from './drawer/CommsDrawer';
 import { SettingsModal } from './modals/SettingsModal';
 import { MemoryViewer } from './modals/MemoryViewer';
 import { VoiceCoordinator } from '../services/voice/voiceCoordinator';
+import { wakeWordDetector } from '../services/voice/wakeWordDetector';
 
 export const JarvisHUD: React.FC = () => {
   const [assistantState, setAssistantState] = useState<AssistantState>('idle');
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [memoryOpen, setMemoryOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [wakeWordActive, setWakeWordActive] = useState(false);
 
   const [settings, setSettings] = useState<JarvisSettings>({
     cloudProvider: 'openrouter',
@@ -518,6 +520,74 @@ export const JarvisHUD: React.FC = () => {
     });
   };
 
+  const handleToggleWakeWord = () => {
+    const next = settings.wakeWordEnabled === false ? true : false;
+    const updated = { ...settings, wakeWordEnabled: next };
+    handleSaveSettings(updated);
+    addActivity(
+      'info',
+      'voice',
+      `Wake-word sentinel ${next ? 'engaged' : 'disengaged'}.`,
+    );
+  };
+
+  const handleSendMessageRef = useRef(handleSendMessage);
+  handleSendMessageRef.current = handleSendMessage;
+
+  const handleVoiceInputTriggerRef = useRef(handleVoiceInputTrigger);
+  handleVoiceInputTriggerRef.current = handleVoiceInputTrigger;
+
+  // Hands-free Wake-Word ("Hey Jarvis") background sentinel
+  useEffect(() => {
+    const isEnabled =
+      settings.wakeWordEnabled !== false && telemetry.micEnabled;
+
+    if (!isEnabled) {
+      wakeWordDetector.stop();
+      setWakeWordActive(false);
+      return;
+    }
+
+    if (assistantState === 'idle') {
+      wakeWordDetector.start({
+        onWakeWordDetected: (directive) => {
+          addActivity('success', 'voice', 'Wake-word "Hey Jarvis" recognized!');
+          if (directive && directive.trim().length > 0) {
+            addActivity(
+              'info',
+              'voice',
+              `Hands-free directive: "${directive}"`,
+            );
+            handleSendMessageRef.current(directive);
+          } else {
+            setAssistantState('listening');
+            speakText('At your service, sir.', () => {
+              handleVoiceInputTriggerRef.current();
+            });
+          }
+        },
+        onStatusChange: (active) => {
+          setWakeWordActive(active);
+        },
+        onError: (err) => {
+          addActivity('warn', 'voice', `Wake-word: ${err}`);
+        },
+      });
+    } else {
+      wakeWordDetector.pause();
+    }
+
+    return () => {
+      wakeWordDetector.stop();
+    };
+  }, [
+    assistantState,
+    settings.wakeWordEnabled,
+    telemetry.micEnabled,
+    addActivity,
+    speakText,
+  ]);
+
   const handleSaveSettings = (newSettings: JarvisSettings) => {
     setSettings(newSettings);
     setTelemetry((prev) => ({
@@ -587,6 +657,8 @@ export const JarvisHUD: React.FC = () => {
         onSelectTheme={handleSelectTheme}
         onToggleMic={handleToggleMic}
         onToggleSpeaker={handleToggleSpeaker}
+        wakeWordActive={wakeWordActive}
+        onToggleWakeWord={handleToggleWakeWord}
         onOpenSettings={() => setSettingsOpen(true)}
         onOpenMemory={() => setMemoryOpen(true)}
         onToggleDrawer={() => setDrawerOpen(true)}

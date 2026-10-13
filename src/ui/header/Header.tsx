@@ -7,6 +7,7 @@ import {
   Volume2,
   VolumeX,
   MessageSquare,
+  Radio,
 } from 'lucide-react';
 import type {
   SystemTelemetry,
@@ -21,6 +22,8 @@ interface HeaderProps {
   onSelectTheme?: (theme: HudTheme) => void;
   onToggleMic: () => void;
   onToggleSpeaker: () => void;
+  wakeWordActive?: boolean;
+  onToggleWakeWord?: () => void;
   onOpenSettings: () => void;
   onOpenMemory: () => void;
   onToggleDrawer: () => void;
@@ -42,6 +45,8 @@ export const Header: React.FC<HeaderProps> = ({
   onSelectTheme,
   onToggleMic,
   onToggleSpeaker,
+  wakeWordActive = false,
+  onToggleWakeWord,
   onOpenSettings,
   onOpenMemory,
   onToggleDrawer,
@@ -90,6 +95,28 @@ export const Header: React.FC<HeaderProps> = ({
 
       {/* Top Right: Icons and labels for each icon - pure borderless, no small divs */}
       <div className="hud-header-actions">
+        <button
+          className={`hud-header-btn ${wakeWordActive ? 'active' : ''}`}
+          title={
+            wakeWordActive
+              ? 'Wake Word Sentinel Active: Say "Hey Jarvis"'
+              : 'Wake Word Sentinel Inactive (Click to toggle)'
+          }
+          onClick={onToggleWakeWord}
+        >
+          <Radio
+            size={14}
+            color={wakeWordActive ? 'var(--cyan-primary)' : 'var(--text-dim)'}
+          />
+          <span
+            style={{
+              color: wakeWordActive ? 'var(--cyan-primary)' : 'var(--text-dim)',
+            }}
+          >
+            {wakeWordActive ? 'Sentinel: On' : 'Sentinel: Off'}
+          </span>
+        </button>
+
         <button
           className="hud-header-btn"
           title={telemetry.micEnabled ? 'Mute Microphone' : 'Engage Microphone'}

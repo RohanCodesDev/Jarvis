@@ -59,6 +59,7 @@ export interface JarvisSettings {
   compactMode: boolean;
   theme?: HudTheme;
   webSearchEnabled?: boolean;
+  wakeWordEnabled?: boolean;
 }
 
 export interface ChatStreamChunkEvent {
