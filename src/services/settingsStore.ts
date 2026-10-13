@@ -11,6 +11,7 @@ function getSettingsPath(): string {
 export const DEFAULT_SETTINGS: JarvisSettings = {
   cloudProvider: 'openrouter',
   openRouterModel: 'anthropic/claude-3.5-sonnet',
+  groqModel: 'openai/gpt-oss-120b',
   ollamaModel: 'llama3:latest',
   hasApiKey: false,
   speechEnabled: true,
@@ -18,6 +19,7 @@ export const DEFAULT_SETTINGS: JarvisSettings = {
   soundEffects: true,
   compactMode: false,
   theme: 'cyan',
+  webSearchEnabled: true,
 };
 
 export function loadSettings(): JarvisSettings {
@@ -28,7 +30,14 @@ export function loadSettings(): JarvisSettings {
   try {
     const raw = fs.readFileSync(filePath, 'utf-8');
     const parsed = JSON.parse(raw) as Partial<JarvisSettings>;
-    return { ...DEFAULT_SETTINGS, ...parsed };
+    const settings = { ...DEFAULT_SETTINGS, ...parsed };
+    if (
+      settings.groqModel === 'llama-3.1-8b-instant' ||
+      settings.groqModel === 'llama-3.3-70b-versatile'
+    ) {
+      settings.groqModel = 'openai/gpt-oss-120b';
+    }
+    return settings;
   } catch (err) {
     console.error('[SettingsStore] Failed to parse settings file:', err);
     return { ...DEFAULT_SETTINGS };

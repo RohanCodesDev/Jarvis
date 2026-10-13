@@ -58,6 +58,7 @@ export interface JarvisSettings {
   soundEffects: boolean;
   compactMode: boolean;
   theme?: HudTheme;
+  webSearchEnabled?: boolean;
 }
 
 export interface ChatStreamChunkEvent {
@@ -91,9 +92,9 @@ export interface DesktopBridgeAPI {
   saveSettings: (
     settings: Partial<JarvisSettings>,
   ) => Promise<{ success: boolean }>;
-  getAvailableModels: () => Promise<
-    Array<{ id: string; name: string; isFree?: boolean }>
-  >;
+  getAvailableModels: (
+    provider?: 'openrouter' | 'groq' | 'ollama',
+  ) => Promise<Array<{ id: string; name: string; isFree?: boolean }>>;
   sendChatMessage: (
     params: {
       streamId: string;
@@ -107,6 +108,7 @@ export interface DesktopBridgeAPI {
     onChunk: (event: ChatStreamChunkEvent) => void,
   ) => () => void;
   cancelChatMessage: (streamId: string) => Promise<void>;
+  onActivityEvent?: (callback: (item: ActivityItem) => void) => () => void;
   transcribeAudio: (params: {
     base64Audio: string;
     format?: string;

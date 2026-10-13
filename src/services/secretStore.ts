@@ -14,6 +14,17 @@ export function isSecretStorageAvailable(): boolean {
   );
 }
 
+export function sanitizeApiKey(raw: string): string {
+  if (!raw) return '';
+  return raw
+    .trim()
+    .replace(/^["'`]|["'`]$/g, '')
+    .replace(/^(?:Bearer\s+|Bearer:\s*)/i, '')
+    .replace(/^(?:GROQ_API_KEY|OPENROUTER_API_KEY)\s*=\s*/i, '')
+    .replace(/[\u200B-\u200D\uFEFF]/g, '')
+    .trim();
+}
+
 /**
  * Encrypt and persist the OpenRouter API key using OS-backed DPAPI / safeStorage.
  * Never called directly from renderer.
@@ -23,7 +34,9 @@ export function storeApiKey(key: string): boolean {
     console.warn('[SecretStore] OS safeStorage encryption unavailable');
     return false;
   }
-  const encrypted = safeStorage.encryptString(key.trim());
+  const sanitized = sanitizeApiKey(key);
+  if (!sanitized) return false;
+  const encrypted = safeStorage.encryptString(sanitized);
   fs.writeFileSync(getSecretsPath(), encrypted);
   return true;
 }
@@ -38,7 +51,7 @@ export function getApiKey(): string | null {
   if (!safeStorage.isEncryptionAvailable()) return null;
   try {
     const encrypted = fs.readFileSync(filePath);
-    return safeStorage.decryptString(encrypted);
+    return sanitizeApiKey(safeStorage.decryptString(encrypted));
   } catch (err) {
     console.error('[SecretStore] Failed to decrypt API key:', err);
     return null;
@@ -76,7 +89,9 @@ export function storeGroqKey(key: string): boolean {
     console.warn('[SecretStore] OS safeStorage encryption unavailable');
     return false;
   }
-  const encrypted = safeStorage.encryptString(key.trim());
+  const sanitized = sanitizeApiKey(key);
+  if (!sanitized) return false;
+  const encrypted = safeStorage.encryptString(sanitized);
   fs.writeFileSync(getGroqSecretsPath(), encrypted);
   return true;
 }
@@ -87,7 +102,7 @@ export function getGroqKey(): string | null {
   if (!safeStorage.isEncryptionAvailable()) return null;
   try {
     const encrypted = fs.readFileSync(filePath);
-    return safeStorage.decryptString(encrypted);
+    return sanitizeApiKey(safeStorage.decryptString(encrypted));
   } catch (err) {
     console.error('[SecretStore] Failed to decrypt Groq key:', err);
     return null;

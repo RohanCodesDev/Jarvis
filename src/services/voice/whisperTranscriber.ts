@@ -1,4 +1,4 @@
-import { getApiKey, getGroqKey } from '../secretStore';
+import { getApiKey, getGroqKey, sanitizeApiKey } from '../secretStore';
 
 export interface TranscribeAudioParams {
   base64Audio: string;
@@ -25,15 +25,39 @@ export class WhisperTranscriber {
     params: TranscribeAudioParams,
   ): Promise<TranscribeAudioResult> {
     const key = this.getApiKey();
-    const groqKey = getGroqKey() || (key?.startsWith('gsk_') ? key : null);
+    const rawGroqKey = getGroqKey();
+    const candidate = rawGroqKey || (key?.startsWith('gsk_') ? key : null);
+    const groqKey = candidate ? sanitizeApiKey(candidate) : null;
 
-    // 1. Prioritize Groq Free Whisper API when configured
-    if (groqKey) {
+    // 1. Prioritize Groq Free Whisper API when a valid gsk_ key is configured
+    if (groqKey && groqKey.startsWith('gsk_')) {
       try {
         const binary = Buffer.from(params.base64Audio, 'base64');
-        const blob = new Blob([binary], { type: 'audio/webm' });
+        if (binary.length < 500) {
+          return {
+            text: '',
+            source: 'whisper',
+            error:
+              'Audio recording was too brief or silent. Please speak your directive clearly.',
+          };
+        }
+
+        const format = params.format || 'wav';
+        const fileName = `audio.${format}`;
+        const mimeType =
+          format === 'wav'
+            ? 'audio/wav'
+            : format === 'ogg'
+              ? 'audio/ogg'
+              : 'audio/webm';
+
+        const fileObj =
+          typeof File !== 'undefined'
+            ? new File([binary], fileName, { type: mimeType })
+            : new Blob([binary], { type: mimeType });
+
         const formData = new FormData();
-        formData.append('file', blob, 'audio.webm');
+        formData.append('file', fileObj, fileName);
         formData.append('model', 'whisper-large-v3-turbo');
 
         const groqRes = await fetch(
@@ -55,6 +79,22 @@ export class WhisperTranscriber {
           };
         } else {
           const errDetail = await groqRes.text().catch(() => '');
+          if (groqRes.status === 401) {
+            return {
+              text: '',
+              source: 'whisper',
+              error:
+                'Groq rejected the API key (401 Invalid Key). Please check console.groq.com/keys and update your key in Settings.',
+            };
+          }
+          if (groqRes.status === 400) {
+            return {
+              text: '',
+              source: 'whisper',
+              error:
+                'Audio capture was too brief or noisy to transcribe. Please speak clearly into the microphone.',
+            };
+          }
           return {
             text: '',
             source: 'whisper',

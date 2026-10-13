@@ -1,5 +1,14 @@
 import { type ISpeechSynthesizer, type SpeechSynthesisOptions } from './types';
 
+function detectScriptLanguage(text: string): string {
+  if (/[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]/.test(text)) return 'ar';
+  if (/[\u0900-\u097F]/.test(text)) return 'hi';
+  if (/[\u4E00-\u9FFF]/.test(text)) return 'zh';
+  if (/[\u3040-\u30FF]/.test(text)) return 'ja';
+  if (/[\u0400-\u04FF]/.test(text)) return 'ru';
+  return 'en';
+}
+
 export class BrowserSpeechSynthesizer implements ISpeechSynthesizer {
   private _isSpeaking = false;
   private currentUtterance: SpeechSynthesisUtterance | null = null;
@@ -56,42 +65,51 @@ export class BrowserSpeechSynthesizer implements ISpeechSynthesizer {
     const langMatches = list.filter((v) =>
       v.lang.toLowerCase().startsWith(lang.toLowerCase()),
     );
-    const candidates = langMatches.length > 0 ? langMatches : list;
-
-    // Search by typical Windows / Chromium voice names for Stark-like JARVIS or assistant
-    if (gender === 'male') {
-      const maleNames = [
-        'george',
-        'david',
-        'oliver',
-        'guy',
-        'ryan',
-        'male',
-        'mark',
-        'daniel',
-      ];
-      const match = candidates.find((v) =>
-        maleNames.some((name) => v.name.toLowerCase().includes(name)),
-      );
-      if (match) return match;
-    } else {
-      const femaleNames = [
-        'zira',
-        'hazel',
-        'samantha',
-        'susan',
-        'catherine',
-        'jenny',
-        'female',
-        'aria',
-      ];
-      const match = candidates.find((v) =>
-        femaleNames.some((name) => v.name.toLowerCase().includes(name)),
-      );
-      if (match) return match;
+    if (langMatches.length > 0) {
+      if (gender === 'male') {
+        const maleNames = [
+          'george',
+          'david',
+          'oliver',
+          'guy',
+          'ryan',
+          'male',
+          'mark',
+          'daniel',
+          'naayf',
+          'tarik',
+        ];
+        const match = langMatches.find((v) =>
+          maleNames.some((name) => v.name.toLowerCase().includes(name)),
+        );
+        if (match) return match;
+      } else {
+        const femaleNames = [
+          'zira',
+          'hazel',
+          'samantha',
+          'susan',
+          'catherine',
+          'jenny',
+          'female',
+          'aria',
+          'hoda',
+          'salma',
+        ];
+        const match = langMatches.find((v) =>
+          femaleNames.some((name) => v.name.toLowerCase().includes(name)),
+        );
+        if (match) return match;
+      }
+      return langMatches[0];
     }
 
-    return candidates[0] || null;
+    if (lang === 'en') {
+      return list[0] || null;
+    }
+
+    // Do NOT force an English voice on non-English scripts if no matching voice is installed
+    return null;
   }
 
   /**
@@ -119,6 +137,12 @@ export class BrowserSpeechSynthesizer implements ISpeechSynthesizer {
 
     this.stop();
 
+    try {
+      if (window.speechSynthesis.paused) {
+        window.speechSynthesis.resume();
+      }
+    } catch {}
+
     const clean = this.sanitizeForSpeech(text);
     if (!clean) {
       onEnd?.();
@@ -129,10 +153,19 @@ export class BrowserSpeechSynthesizer implements ISpeechSynthesizer {
       const utterance = new SpeechSynthesisUtterance(clean);
       this.currentUtterance = utterance;
 
-      const voice = this.pickVoice(
-        options?.voiceGender || 'male',
-        options?.lang || 'en',
-      );
+      const detectedLang = detectScriptLanguage(clean);
+      const targetLang =
+        options?.lang || (detectedLang !== 'en' ? detectedLang : 'en');
+      utterance.lang =
+        targetLang === 'ar'
+          ? 'ar-SA'
+          : targetLang === 'hi'
+            ? 'hi-IN'
+            : targetLang === 'en'
+              ? 'en-US'
+              : targetLang;
+
+      const voice = this.pickVoice(options?.voiceGender || 'male', targetLang);
       if (voice) {
         utterance.voice = voice;
       }
@@ -154,6 +187,9 @@ export class BrowserSpeechSynthesizer implements ISpeechSynthesizer {
       utterance.onerror = (e) => {
         this._isSpeaking = false;
         this.currentUtterance = null;
+        try {
+          window.speechSynthesis.cancel();
+        } catch {}
         if (e.error !== 'canceled' && e.error !== 'interrupted') {
           onError?.(`Speech synthesis error: ${e.error}`);
         }
@@ -164,6 +200,9 @@ export class BrowserSpeechSynthesizer implements ISpeechSynthesizer {
     } catch (err: unknown) {
       this._isSpeaking = false;
       this.currentUtterance = null;
+      try {
+        window.speechSynthesis.cancel();
+      } catch {}
       const msg = err instanceof Error ? err.message : String(err);
       onError?.(`Failed to initiate speech: ${msg}`);
       onEnd?.();

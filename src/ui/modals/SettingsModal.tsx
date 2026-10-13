@@ -9,6 +9,7 @@ import {
   EyeOff,
   ShieldCheck,
   Trash2,
+  Globe,
 } from 'lucide-react';
 import type { JarvisSettings } from '../../types/hud';
 
@@ -59,15 +60,18 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   useEffect(() => {
     setFormData(settings);
+  }, [settings]);
+
+  useEffect(() => {
     if (window.jarvisDesktop?.getAvailableModels) {
       window.jarvisDesktop
-        .getAvailableModels()
+        .getAvailableModels(formData.cloudProvider)
         .then((m) => {
           if (m && m.length > 0) setModelsList(m);
         })
         .catch(() => {});
     }
-  }, [settings]);
+  }, [formData.cloudProvider]);
 
   if (!isOpen) return null;
 
@@ -82,11 +86,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           const validation = await window.jarvisDesktop.validateApiKey(trimmed);
           if (!validation.valid) {
             setKeyStatusMsg(
-              `Verification warning: ${validation.error || 'Key rejected by OpenRouter'}`,
+              `❌ ${validation.error || 'Key rejected by OpenRouter'}`,
             );
+            setSavingKey(false);
+            return;
           }
         } catch {
-          // Main process reload pending or validation endpoint unreachable
+          // Fallback if validation IPC is not reachable
         }
       }
 
@@ -95,13 +101,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         if (res.success) {
           setFormData((prev) => ({ ...prev, hasApiKey: true }));
           setKeyInput('');
-          setKeyStatusMsg('Key verified and encrypted in OS safeStorage.');
+          setKeyStatusMsg('✅ Key verified and encrypted in OS safeStorage.');
         } else {
-          setKeyStatusMsg(`Encryption failed: ${res.error || 'Unknown error'}`);
+          setKeyStatusMsg(
+            `❌ Encryption failed: ${res.error || 'Unknown error'}`,
+          );
         }
       }
     } catch (err: unknown) {
-      setKeyStatusMsg(`Error: ${(err as Error).message}`);
+      setKeyStatusMsg(`❌ Error: ${(err as Error).message}`);
     } finally {
       setSavingKey(false);
     }
@@ -136,10 +144,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             await window.jarvisDesktop.validateGroqKey(trimmed);
           if (!validation.valid) {
             setGroqKeyStatusMsg(
-              `Verification warning: ${validation.error || 'Key rejected by Groq'}`,
+              `❌ ${validation.error || 'Key rejected by Groq'}. Verify at console.groq.com/keys`,
             );
+            setSavingGroqKey(false);
+            return;
           }
-        } catch {}
+        } catch {
+          // Fallback if validation IPC is not reachable
+        }
       }
 
       if (window.jarvisDesktop?.setGroqKey) {
@@ -148,16 +160,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           setFormData((prev) => ({ ...prev, hasGroqKey: true }));
           setGroqKeyInput('');
           setGroqKeyStatusMsg(
-            'Groq key encrypted and saved in OS safeStorage.',
+            '✅ Groq key verified and encrypted in OS safeStorage.',
           );
         } else {
           setGroqKeyStatusMsg(
-            `Encryption failed: ${res.error || 'Unknown error'}`,
+            `❌ Encryption failed: ${res.error || 'Unknown error'}`,
           );
         }
       }
     } catch (err: unknown) {
-      setGroqKeyStatusMsg(`Error: ${(err as Error).message}`);
+      setGroqKeyStatusMsg(`❌ Error: ${(err as Error).message}`);
     } finally {
       setSavingGroqKey(false);
     }
@@ -259,23 +271,24 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </div>
           ) : formData.cloudProvider === 'groq' ? (
             <div className="form-group">
-              <label className="form-label">Groq Fast Model Identifier</label>
+              <label className="form-label">
+                Groq High-Speed Model Identifier
+              </label>
               <select
                 className="form-select"
-                value={formData.groqModel || 'llama-3.3-70b-versatile'}
+                value={
+                  formData.groqModel ||
+                  (modelsList[0] ? modelsList[0].id : 'openai/gpt-oss-120b')
+                }
                 onChange={(e) =>
                   setFormData({ ...formData, groqModel: e.target.value })
                 }
               >
-                <option value="llama-3.3-70b-versatile">
-                  Llama 3.3 70B Versatile (Free - Flagship)
-                </option>
-                <option value="llama-3.1-8b-instant">
-                  Llama 3.1 8B Instant (Free - Ultra Speed)
-                </option>
-                <option value="mixtral-8x7b-32768">
-                  Mixtral 8x7B (Free - 32k Context)
-                </option>
+                {modelsList.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name}
+                  </option>
+                ))}
               </select>
             </div>
           ) : (
@@ -384,11 +397,29 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               )}
             </div>
 
+            {keyInput.trim() && keyInput.trim().startsWith('gsk_') && (
+              <div
+                style={{
+                  fontSize: '11px',
+                  color: '#fbbf24',
+                  marginTop: '4px',
+                }}
+              >
+                ⚠️ Notice: This key begins with "gsk_", which is a Groq key.
+                Please paste it into the Groq API Key field below!
+              </div>
+            )}
+
             {keyStatusMsg && (
               <div
                 style={{
                   fontSize: '11px',
-                  color: keyStatusMsg.includes('Error') ? '#f87171' : '#86efac',
+                  color:
+                    keyStatusMsg.includes('Error') ||
+                    keyStatusMsg.includes('❌') ||
+                    keyStatusMsg.includes('rejected')
+                      ? '#f87171'
+                      : '#86efac',
                   marginTop: '4px',
                 }}
               >
@@ -497,12 +528,28 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               )}
             </div>
 
+            {groqKeyInput.trim() && !groqKeyInput.trim().startsWith('gsk_') && (
+              <div
+                style={{
+                  fontSize: '11px',
+                  color: '#fbbf24',
+                  marginTop: '4px',
+                }}
+              >
+                ⚠️ Notice: Groq API keys begin with "gsk_". (Keys starting with
+                "sk-" are OpenRouter or OpenAI keys).
+              </div>
+            )}
+
             {groqKeyStatusMsg && (
               <div
                 style={{
                   fontSize: '11px',
                   color:
                     groqKeyStatusMsg.includes('Error') ||
+                    groqKeyStatusMsg.includes('❌') ||
+                    groqKeyStatusMsg.includes('rejected') ||
+                    groqKeyStatusMsg.includes('failed') ||
                     groqKeyStatusMsg.includes('warning')
                       ? '#f87171'
                       : '#86efac',
@@ -585,6 +632,51 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 />
                 <span>HUD Sound Effects</span>
               </label>
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label
+              className="form-label"
+              style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+            >
+              <Globe size={14} color="var(--cyan-primary)" />
+              <span>Real-Time Web Intelligence</span>
+            </label>
+            <div style={{ marginTop: '4px' }}>
+              <label
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  cursor: 'pointer',
+                  fontSize: '13px',
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={formData.webSearchEnabled !== false}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      webSearchEnabled: e.target.checked,
+                    })
+                  }
+                />
+                <span>Autonomous Web Surfing & Fact Verification</span>
+              </label>
+              <span
+                style={{
+                  fontSize: '11px',
+                  color: 'var(--text-muted)',
+                  marginTop: '4px',
+                  display: 'block',
+                }}
+              >
+                Silently retrieves live, verified internet intelligence when
+                querying current leaders, events, facts, or news. Zero
+                permissions asked.
+              </span>
             </div>
           </div>
 

@@ -1,3 +1,4 @@
+import { loadSettings } from '../settingsStore';
 import {
   type AIModelInfo,
   type AIProvider,
@@ -5,36 +6,54 @@ import {
   type SendMessageOptions,
   SendMessageOptionsSchema,
 } from './types';
+import { JARVIS_SYSTEM_PROMPT } from './systemPrompt';
 
 const GROQ_API_BASE = 'https://api.groq.com/openai/v1';
 
 export const GROQ_MODELS: AIModelInfo[] = [
   {
-    id: 'llama-3.3-70b-versatile',
-    name: 'Llama 3.3 70B Versatile (Free Tier)',
+    id: 'openai/gpt-oss-120b',
+    name: 'OpenAI GPT-OSS 120B (High Intelligence)',
+    isFree: true,
+    contextLength: 131072,
+  },
+  {
+    id: 'openai/gpt-oss-20b',
+    name: 'OpenAI GPT-OSS 20B (Ultra Fast ~1000 t/s)',
+    isFree: true,
+    contextLength: 131072,
+  },
+  {
+    id: 'qwen/qwen3.8-27b',
+    name: 'Qwen 3.8 27B Vision / Reasoning',
+    isFree: true,
+    contextLength: 131072,
+  },
+  {
+    id: 'llama-3.1-8b-instant',
+    name: 'Llama 3.1 8B Instant',
     isFree: true,
     contextLength: 128000,
   },
   {
-    id: 'llama-3.1-8b-instant',
-    name: 'Llama 3.1 8B Instant (Free Tier)',
+    id: 'llama-3.3-70b-versatile',
+    name: 'Llama 3.3 70B Versatile',
+    isFree: true,
+    contextLength: 128000,
+  },
+  {
+    id: 'deepseek-r1-distill-llama-70b',
+    name: 'DeepSeek R1 Distill Llama 70B',
     isFree: true,
     contextLength: 128000,
   },
   {
     id: 'mixtral-8x7b-32768',
-    name: 'Mixtral 8x7B (Free Tier)',
+    name: 'Mixtral 8x7B (MoE 32k)',
     isFree: true,
     contextLength: 32768,
   },
 ];
-
-const JARVIS_SYSTEM_PROMPT = `You are JARVIS, an intelligent AI desktop assistant running natively on Windows 11.
-Persona and Instructions:
-- Sharp, composed, insightful, and authoritative.
-- Speak in natural, sophisticated English. Avoid generic canned bot greetings.
-- Deliver direct, high-value explanations and responses.
-- Structure responses clearly with concise points when appropriate for a modern tactical terminal HUD.`;
 
 export class GroqProvider implements AIProvider {
   public readonly name = 'groq';
@@ -68,7 +87,50 @@ export class GroqProvider implements AIProvider {
   }
 
   async getModels(): Promise<AIModelInfo[]> {
-    return GROQ_MODELS;
+    const key = this.getApiKey();
+    if (!key) return GROQ_MODELS;
+
+    try {
+      const response = await fetch(`${GROQ_API_BASE}/models`, {
+        headers: {
+          Authorization: `Bearer ${key}`,
+        },
+      });
+
+      if (!response.ok) return GROQ_MODELS;
+
+      const data = (await response.json()) as {
+        data?: Array<{ id: string; active?: boolean; context_window?: number }>;
+      };
+
+      if (!Array.isArray(data.data) || data.data.length === 0)
+        return GROQ_MODELS;
+
+      // Filter for chat-capable models (ignore whisper audio, guard, orpheus TTS)
+      const chatModels = data.data
+        .filter((m) => {
+          const id = m.id.toLowerCase();
+          return (
+            !id.includes('whisper') &&
+            !id.includes('guard') &&
+            !id.includes('orpheus') &&
+            (m.active === undefined || m.active === true)
+          );
+        })
+        .map((m) => ({
+          id: m.id,
+          name: `${m.id}`,
+          isFree: true,
+          contextLength: m.context_window || 128000,
+        }));
+
+      if (chatModels.length > 0) {
+        return chatModels;
+      }
+      return GROQ_MODELS;
+    } catch {
+      return GROQ_MODELS;
+    }
   }
 
   async sendMessage(
@@ -91,16 +153,28 @@ export class GroqProvider implements AIProvider {
       return;
     }
 
-    const model = options.model?.trim() || 'llama-3.3-70b-versatile';
+    let model = options.model?.trim();
+    if (!model || model.includes('/')) {
+      const settings = loadSettings();
+      model = settings.groqModel || 'openai/gpt-oss-120b';
+    }
     const temperature = options.temperature ?? 0.7;
 
-    const messages = [...options.messages];
-    if (!messages.some((m) => m.role === 'system')) {
-      messages.unshift({
-        role: 'system',
-        content: JARVIS_SYSTEM_PROMPT,
-      });
+    let finalSystemPrompt = JARVIS_SYSTEM_PROMPT;
+    if (options.searchContext) {
+      finalSystemPrompt += `\n\n${options.searchContext}`;
     }
+
+    const nonSystemMessages = options.messages.filter(
+      (m) => m.role !== 'system',
+    );
+    const messages = [
+      {
+        role: 'system' as const,
+        content: finalSystemPrompt,
+      },
+      ...nonSystemMessages,
+    ];
 
     let response: Response;
     try {
@@ -137,6 +211,31 @@ export class GroqProvider implements AIProvider {
         detail = errJson.error?.message || '';
       } catch {
         detail = await response.text().catch(() => '');
+      }
+
+      // If 404: model not found or account doesn't have access.
+      // Dynamically query live models on this key and auto-switch to an active one!
+      if (response.status === 404) {
+        try {
+          const liveModels = await this.getModels();
+          const candidate = liveModels.find((m) => m.id !== model);
+          if (candidate) {
+            console.warn(
+              `[GroqProvider] Model "${model}" not found (404). Live models on this key: [${liveModels.map((m) => m.id).join(', ')}]. Auto-switching to "${candidate.id}".`,
+            );
+            return this.sendMessage(
+              { ...options, model: candidate.id },
+              callbacks,
+            );
+          } else {
+            callbacks.onError(
+              `Groq error (404): Model "${model}" is unavailable on this account. Active models: ${liveModels.map((m) => m.id).join(', ') || 'none found'}.`,
+            );
+            return;
+          }
+        } catch {
+          // If live fetch fails, fall through to default error
+        }
       }
 
       callbacks.onError(

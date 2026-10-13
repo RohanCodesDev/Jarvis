@@ -169,6 +169,15 @@ export const JarvisHUD: React.FC = () => {
         })
         .catch(() => {});
     }
+
+    if (window.jarvisDesktop?.onActivityEvent) {
+      const unsub = window.jarvisDesktop.onActivityEvent((act) => {
+        setActivities((prev) => [...prev.slice(-25), act]);
+      });
+      return () => {
+        unsub();
+      };
+    }
   }, [addActivity]);
 
   // Subtle telemetry pulse
@@ -253,11 +262,44 @@ export const JarvisHUD: React.FC = () => {
   );
 
   const handleSendMessage = (text: string) => {
-    if (!text.trim() || assistantState === 'thinking') return;
+    const trimmed = text.trim();
+    if (!trimmed || assistantState === 'thinking') return;
 
     if (streamCleanupRef.current) {
       streamCleanupRef.current();
       streamCleanupRef.current = null;
+    }
+
+    const lower = trimmed.toLowerCase();
+    if (
+      lower === 'clear' ||
+      lower === 'clear history' ||
+      lower === 'clear memory' ||
+      lower === 'clear context' ||
+      lower === 'reset' ||
+      lower === 'reset memory' ||
+      lower === 'reset context' ||
+      lower === '/clear' ||
+      lower === '/reset'
+    ) {
+      const now = new Date().toLocaleTimeString('en-US', { hour12: false });
+      const resetMsg: ChatMessage = {
+        id: 'msg-init-' + Date.now(),
+        sender: 'jarvis',
+        text: 'Context memory banks cleared. System state nominal. Standing by for directives, sir.',
+        timestamp: now,
+        status: 'delivered',
+      };
+      setMessages([resetMsg]);
+      setAssistantState('speaking');
+      addActivity('info', 'ai', 'Context memory banks purged.');
+      speakText(
+        'Context memory cleared. Standing by for directives, sir.',
+        () => {
+          setAssistantState('idle');
+        },
+      );
+      return;
     }
 
     const now = new Date().toLocaleTimeString('en-US', { hour12: false });
@@ -305,12 +347,17 @@ export const JarvisHUD: React.FC = () => {
       }));
 
       let accumulated = '';
+      const modelToSend =
+        settings.cloudProvider === 'groq'
+          ? settings.groqModel || undefined
+          : settings.openRouterModel;
+
       const cleanup = window.jarvisDesktop.sendChatMessage(
         {
           streamId,
           message: text,
           history,
-          model: settings.openRouterModel,
+          model: modelToSend,
         },
         (event) => {
           if (event.chunk) {

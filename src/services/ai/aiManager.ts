@@ -61,16 +61,24 @@ export class AIManager {
   /**
    * List available models.
    */
-  public async getModels(): Promise<AIModelInfo[]> {
+  public async getModels(
+    providerOverride?: 'openrouter' | 'groq' | 'ollama',
+  ): Promise<AIModelInfo[]> {
     const settings = loadSettings();
-    if (settings.cloudProvider === 'groq' && hasGroqKey()) {
+    const provider = providerOverride || settings.cloudProvider;
+    if (provider === 'groq') {
+      return this.groqProvider.getModels();
+    }
+    if (provider === 'openrouter') {
+      return hasApiKey()
+        ? this.openRouterProvider.getModels()
+        : this.mockProvider.getModels();
+    }
+    if (hasGroqKey()) {
       return this.groqProvider.getModels();
     }
     if (hasApiKey()) {
       return this.openRouterProvider.getModels();
-    }
-    if (hasGroqKey()) {
-      return this.groqProvider.getModels();
     }
     return this.mockProvider.getModels();
   }

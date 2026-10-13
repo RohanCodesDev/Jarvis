@@ -10,6 +10,7 @@ const DIRECTIVES = [
   { label: 'Memory Bank', cmd: 'Inspect memory banks' },
   { label: 'Security Check', cmd: 'Perform security diagnostics' },
   { label: 'Audio Harmonic', cmd: 'Harmonic carrier frequencies check' },
+  { label: 'Purge Context', cmd: 'clear context' },
 ];
 
 export const QuickDirectiveChips: React.FC<QuickDirectiveChipsProps> = ({

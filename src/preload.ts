@@ -38,8 +38,8 @@ const desktopAPI: DesktopBridgeAPI = {
   validateGroqKey: async (key: string) => {
     return ipcRenderer.invoke('desktop:validateGroqKey', key);
   },
-  getAvailableModels: async () => {
-    return ipcRenderer.invoke('desktop:getAvailableModels');
+  getAvailableModels: async (provider?: 'openrouter' | 'groq' | 'ollama') => {
+    return ipcRenderer.invoke('desktop:getAvailableModels', provider);
   },
   sendChatMessage: (params, onChunk) => {
     const handler = (
@@ -67,6 +67,20 @@ const desktopAPI: DesktopBridgeAPI = {
   },
   cancelChatMessage: async (streamId: string) => {
     return ipcRenderer.invoke('desktop:cancelChatMessage', streamId);
+  },
+  onActivityEvent: (
+    callback: (item: import('./types/hud').ActivityItem) => void,
+  ) => {
+    const handler = (
+      _event: Electron.IpcRendererEvent,
+      item: import('./types/hud').ActivityItem,
+    ) => {
+      callback(item);
+    };
+    ipcRenderer.on('desktop:activityEvent', handler);
+    return () => {
+      ipcRenderer.removeListener('desktop:activityEvent', handler);
+    };
   },
   transcribeAudio: async (params) => {
     return ipcRenderer.invoke('desktop:transcribeAudio', params);

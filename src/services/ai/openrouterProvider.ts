@@ -5,6 +5,7 @@ import {
   type SendMessageOptions,
   SendMessageOptionsSchema,
 } from './types';
+import { JARVIS_SYSTEM_PROMPT } from './systemPrompt';
 
 const OPENROUTER_API_BASE = 'https://openrouter.ai/api/v1';
 
@@ -40,14 +41,6 @@ export const CURATED_MODELS: AIModelInfo[] = [
     contextLength: 200000,
   },
 ];
-
-const JARVIS_SYSTEM_PROMPT = `You are JARVIS, an intelligent AI desktop assistant running natively on Windows 11.
-Persona and Instructions:
-- Sharp, composed, insightful, and authoritative.
-- Speak in natural, sophisticated English. Avoid generic canned bot greetings like "Hello! How can I help you today?".
-- Deliver direct, high-value explanations and responses.
-- Structure responses clearly with concise points when appropriate for a modern tactical terminal HUD.
-- You have real-time desktop awareness and strive for maximum precision.`;
 
 export class OpenRouterProvider implements AIProvider {
   public readonly name = 'openrouter';
@@ -187,13 +180,21 @@ export class OpenRouterProvider implements AIProvider {
     const temperature = options.temperature ?? 0.7;
 
     // 2. Prepare message history with JARVIS system prompt
-    const messages = [...options.messages];
-    if (!messages.some((m) => m.role === 'system')) {
-      messages.unshift({
-        role: 'system',
-        content: JARVIS_SYSTEM_PROMPT,
-      });
+    let finalSystemPrompt = JARVIS_SYSTEM_PROMPT;
+    if (options.searchContext) {
+      finalSystemPrompt += `\n\n${options.searchContext}`;
     }
+
+    const nonSystemMessages = options.messages.filter(
+      (m) => m.role !== 'system',
+    );
+    const messages = [
+      {
+        role: 'system' as const,
+        content: finalSystemPrompt,
+      },
+      ...nonSystemMessages,
+    ];
 
     // 3. Initiate streaming request
     let response: Response;

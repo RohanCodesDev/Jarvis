@@ -23,10 +23,16 @@ import {
   storeGroqKey,
   hasGroqKey,
   deleteGroqKey,
+  sanitizeApiKey,
 } from './services/secretStore';
 import { loadSettings, saveSettings } from './services/settingsStore';
 import { aiManager } from './services/ai/aiManager';
 import { whisperTranscriber } from './services/voice/whisperTranscriber';
+import {
+  shouldSearchWeb,
+  searchWeb,
+  buildSearchAugmentationPrompt,
+} from './services/search/webSearchService';
 
 function setupIpcHandlers() {
   ipcMain.handle('desktop:getSystemInfo', async (event) => {
@@ -100,10 +106,14 @@ function setupIpcHandlers() {
 
   ipcMain.handle('desktop:setGroqKey', async (event, key: unknown) => {
     if (!isValidSender(event)) throw new Error('Unauthorized IPC sender');
-    if (typeof key !== 'string' || !key.trim()) {
+    if (typeof key !== 'string') {
       return { success: false, error: 'Invalid Groq API key' };
     }
-    const success = storeGroqKey(key);
+    const sanitized = sanitizeApiKey(key);
+    if (!sanitized) {
+      return { success: false, error: 'Groq API key cannot be empty' };
+    }
+    const success = storeGroqKey(sanitized);
     return { success, error: success ? undefined : 'Failed to encrypt secret' };
   });
 
@@ -114,16 +124,31 @@ function setupIpcHandlers() {
 
   ipcMain.handle('desktop:validateGroqKey', async (event, key: unknown) => {
     if (!isValidSender(event)) throw new Error('Unauthorized IPC sender');
-    if (typeof key !== 'string' || !key.trim()) {
+    if (typeof key !== 'string') {
       return { valid: false, error: 'Empty key provided' };
+    }
+    const sanitized = sanitizeApiKey(key);
+    if (!sanitized) {
+      return { valid: false, error: 'Groq API key cannot be empty' };
+    }
+    if (!sanitized.startsWith('gsk_')) {
+      return {
+        valid: false,
+        error:
+          'Groq API keys must begin with "gsk_". (Check if an OpenRouter or OpenAI key was entered by mistake)',
+      };
     }
     try {
       const res = await fetch('https://api.groq.com/openai/v1/models', {
-        headers: { Authorization: `Bearer ${key.trim()}` },
+        headers: { Authorization: `Bearer ${sanitized}` },
       });
       if (res.ok) return { valid: true };
       if (res.status === 401) {
-        return { valid: false, error: 'Invalid Groq API key' };
+        return {
+          valid: false,
+          error:
+            'Invalid API key: Groq rejected this key (401). Verify or create a free key at https://console.groq.com/keys',
+        };
       }
       return { valid: false, error: `Groq error status ${res.status}` };
     } catch (err: unknown) {
@@ -153,12 +178,19 @@ function setupIpcHandlers() {
     return aiManager.validateOpenRouterKey(key);
   });
 
-  ipcMain.handle('desktop:getAvailableModels', async (event) => {
-    if (!isValidSender(event)) {
-      throw new Error('Unauthorized IPC sender');
-    }
-    return aiManager.getModels();
-  });
+  ipcMain.handle(
+    'desktop:getAvailableModels',
+    async (event, provider?: unknown) => {
+      if (!isValidSender(event)) {
+        throw new Error('Unauthorized IPC sender');
+      }
+      return aiManager.getModels(
+        typeof provider === 'string'
+          ? (provider as 'openrouter' | 'groq' | 'ollama')
+          : undefined,
+      );
+    },
+  );
 
   ipcMain.handle(
     'desktop:cancelChatMessage',
@@ -200,11 +232,39 @@ function setupIpcHandlers() {
     }));
     messages.push({ role: 'user' as const, content: data.message });
 
+    let searchContext: string | undefined;
+    const settings = loadSettings();
+    if (settings.webSearchEnabled !== false && shouldSearchWeb(data.message)) {
+      try {
+        const searchResults = await searchWeb(data.message);
+        if (searchResults.length > 0) {
+          searchContext = buildSearchAugmentationPrompt(
+            data.message,
+            searchResults,
+          );
+          if (!event.sender.isDestroyed()) {
+            event.sender.send('desktop:activityEvent', {
+              id: 'act-' + Date.now(),
+              timestamp: new Date().toLocaleTimeString('en-US', {
+                hour12: false,
+              }),
+              level: 'info',
+              category: 'tool',
+              message: `Live web intelligence acquired (${searchResults.length} sources) for "${data.message.length > 28 ? data.message.substring(0, 28) + '...' : data.message}"`,
+            });
+          }
+        }
+      } catch (searchErr) {
+        console.warn('[Main] Live web search skipped:', searchErr);
+      }
+    }
+
     aiManager.streamChat(
       data.streamId,
       {
         messages,
         model: data.model,
+        searchContext,
       },
       (chunk) => {
         if (!event.sender.isDestroyed()) {

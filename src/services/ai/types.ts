@@ -19,6 +19,7 @@ export interface SendMessageOptions {
   model?: string;
   temperature?: number;
   maxTokens?: number;
+  searchContext?: string;
   signal?: AbortSignal;
 }
 
@@ -50,4 +51,5 @@ export const SendMessageOptionsSchema = z.object({
   model: z.string().optional(),
   temperature: z.number().min(0).max(2).optional(),
   maxTokens: z.number().positive().optional(),
+  searchContext: z.string().optional(),
 });
