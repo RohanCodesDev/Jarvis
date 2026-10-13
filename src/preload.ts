@@ -113,6 +113,18 @@ const desktopAPI: DesktopBridgeAPI = {
   getDbStatus: async () => {
     return ipcRenderer.invoke('desktop:getDbStatus');
   },
+  executeTool: async (toolId, args) => {
+    return ipcRenderer.invoke('desktop:executeTool', toolId, args);
+  },
+  getApprovedApps: async () => {
+    return ipcRenderer.invoke('desktop:getApprovedApps');
+  },
+  getSystemDiagnostics: async () => {
+    return ipcRenderer.invoke('desktop:getSystemDiagnostics');
+  },
+  getToolAuditLogs: async () => {
+    return ipcRenderer.invoke('desktop:getToolAuditLogs');
+  },
 };
 
 contextBridge.exposeInMainWorld('jarvisDesktop', desktopAPI);

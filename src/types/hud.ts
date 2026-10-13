@@ -134,6 +134,20 @@ export interface DesktopBridgeAPI {
   ) => Promise<{ success: boolean }>;
   clearChatHistory: (conversationId?: string) => Promise<{ success: boolean }>;
   getDbStatus: () => Promise<{ isConnected: boolean; error?: string }>;
+  // Stage 5: Desktop Actions & Windows Automation
+  executeTool?: (
+    toolId: string,
+    args?: unknown,
+  ) => Promise<import('../services/tools/toolTypes').ToolExecutionResult>;
+  getApprovedApps?: () => Promise<
+    import('../services/tools/appLauncher').ApprovedApp[]
+  >;
+  getSystemDiagnostics?: () => Promise<
+    import('../services/tools/toolTypes').ToolExecutionResult
+  >;
+  getToolAuditLogs?: () => Promise<
+    import('../services/tools/toolTypes').ToolAuditLog[]
+  >;
 }
 
 declare global {

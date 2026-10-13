@@ -34,6 +34,12 @@ import {
   buildSearchAugmentationPrompt,
 } from './services/search/webSearchService';
 import { databaseService } from './services/db/databaseService';
+import { globalToolRegistry } from './services/tools/toolRegistry';
+import { APPROVED_APPS } from './services/tools/appLauncher';
+import {
+  detectDirectIntent,
+  parseModelDirectives,
+} from './services/tools/intentDetector';
 
 function setupIpcHandlers() {
   ipcMain.handle('desktop:getSystemInfo', async (event) => {
@@ -272,6 +278,38 @@ function setupIpcHandlers() {
       console.warn('[Main] Failed to load memory context:', memErr);
     }
 
+    // Direct Fast-Path Intent Detection & Execution
+    const directAction = detectDirectIntent(data.message);
+    let directActionResultMessage: string | undefined;
+    if (directAction) {
+      try {
+        const actionResult = await globalToolRegistry.executeTool(
+          directAction.toolId,
+          directAction.args,
+        );
+        directActionResultMessage = `[SYSTEM TOOL RESULT: Tool "${directAction.toolId}" executed. Result: "${actionResult.message}"]`;
+        if (!event.sender.isDestroyed()) {
+          event.sender.send('desktop:activityEvent', {
+            id: 'act-' + Date.now(),
+            timestamp: new Date().toLocaleTimeString('en-US', {
+              hour12: false,
+            }),
+            level: actionResult.success ? 'success' : 'warn',
+            category: 'tool',
+            message: actionResult.message,
+          });
+        }
+      } catch (toolErr) {
+        console.warn('[Main] Direct action execution error:', toolErr);
+      }
+    }
+
+    if (directActionResultMessage) {
+      searchContext = searchContext
+        ? `${searchContext}\n\n${directActionResultMessage}`
+        : directActionResultMessage;
+    }
+
     // Archive user directive to persistent database
     databaseService
       .saveChatMessage({
@@ -299,11 +337,40 @@ function setupIpcHandlers() {
           });
         }
       },
-      (fullResponse, metadata) => {
+      async (fullResponse, metadata) => {
+        let finalResponseText = fullResponse;
+
+        // Stage 5: Parse Model Directives [ACTION: toolId {...}]
+        const parsed = parseModelDirectives(fullResponse);
+        if (parsed.actions.length > 0) {
+          finalResponseText = parsed.cleanedText;
+          for (const action of parsed.actions) {
+            try {
+              const res = await globalToolRegistry.executeTool(
+                action.toolId,
+                action.args,
+              );
+              if (!event.sender.isDestroyed()) {
+                event.sender.send('desktop:activityEvent', {
+                  id: 'act-' + Date.now(),
+                  timestamp: new Date().toLocaleTimeString('en-US', {
+                    hour12: false,
+                  }),
+                  level: res.success ? 'success' : 'warn',
+                  category: 'tool',
+                  message: res.message,
+                });
+              }
+            } catch (actErr) {
+              console.warn('[Main] Directive execution error:', actErr);
+            }
+          }
+        }
+
         if (!event.sender.isDestroyed()) {
           event.sender.send('desktop:chatChunk', {
             streamId: data.streamId,
-            fullResponse,
+            fullResponse: finalResponseText,
             done: true,
             metadata,
           });
@@ -313,7 +380,7 @@ function setupIpcHandlers() {
           .saveChatMessage({
             id: 'msg-j-' + Date.now(),
             sender: 'jarvis',
-            text: fullResponse,
+            text: finalResponseText,
             timestamp: new Date().toLocaleTimeString('en-US', {
               hour12: false,
             }),
@@ -425,6 +492,33 @@ function setupIpcHandlers() {
   ipcMain.handle('desktop:getDbStatus', async (event) => {
     if (!isValidSender(event)) throw new Error('Unauthorized IPC sender');
     return databaseService.getStatus();
+  });
+
+  // Stage 5: Desktop Actions & Windows Automation
+  ipcMain.handle(
+    'desktop:executeTool',
+    async (event, toolId: unknown, args: unknown) => {
+      if (!isValidSender(event)) throw new Error('Unauthorized IPC sender');
+      if (typeof toolId !== 'string') {
+        return { success: false, error: 'Invalid tool ID' };
+      }
+      return globalToolRegistry.executeTool(toolId, args);
+    },
+  );
+
+  ipcMain.handle('desktop:getApprovedApps', async (event) => {
+    if (!isValidSender(event)) throw new Error('Unauthorized IPC sender');
+    return APPROVED_APPS;
+  });
+
+  ipcMain.handle('desktop:getSystemDiagnostics', async (event) => {
+    if (!isValidSender(event)) throw new Error('Unauthorized IPC sender');
+    return globalToolRegistry.executeTool('system_diagnostics', {});
+  });
+
+  ipcMain.handle('desktop:getToolAuditLogs', async (event) => {
+    if (!isValidSender(event)) throw new Error('Unauthorized IPC sender');
+    return globalToolRegistry.getAuditLogs();
   });
 }
 
