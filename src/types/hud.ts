@@ -24,6 +24,8 @@ export interface ActivityItem {
   level: 'info' | 'success' | 'warn' | 'error';
   category: 'system' | 'ai' | 'voice' | 'tool' | 'security';
   message: string;
+  durationMs?: number;
+  imageUrl?: string;
 }
 
 export interface SystemTelemetry {

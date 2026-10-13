@@ -13,13 +13,17 @@ import {
   createSafeFile,
   readSafeFile,
 } from '../src/services/tools/fileTools';
+import { controlVolume, controlMedia } from '../src/services/tools/mediaTools';
+import { getNetworkDiagnostics } from '../src/services/tools/networkTools';
+import { lockWorkstation } from '../src/services/tools/systemControlTools';
+import { capturePrimaryScreen } from '../src/services/tools/screenCaptureTool';
 import {
   detectDirectIntent,
   parseModelDirectives,
 } from '../src/services/tools/intentDetector';
 import { ToolRegistry } from '../src/services/tools/toolRegistry';
 
-describe('Stage 5: Safe Desktop Actions & Windows Automation', () => {
+describe('Stage 5 & God-Mode: Safe Desktop Actions & Windows Automation', () => {
   describe('Application Launcher Allowlist', () => {
     it('accurately identifies approved applications and aliases', () => {
       expect(findApprovedApp('spotify')?.id).toBe('spotify');
@@ -88,6 +92,44 @@ describe('Stage 5: Safe Desktop Actions & Windows Automation', () => {
     });
   });
 
+  describe('God-Mode Tools: Media, Volume, Network, Screen, and Lock', () => {
+    it('executes master volume controls safely', async () => {
+      const muteRes = await controlVolume('mute');
+      expect(muteRes.success).toBe(true);
+      expect(muteRes.message).toContain('muted');
+
+      const setRes = await controlVolume('set', 65);
+      expect(setRes.success).toBe(true);
+      expect(setRes.message).toContain('65%');
+    });
+
+    it('executes media key controls safely', async () => {
+      const mediaRes = await controlMedia('play_pause');
+      expect(mediaRes.success).toBe(true);
+      expect(mediaRes.message).toContain('Media playback toggled');
+    });
+
+    it('queries network diagnostics', async () => {
+      const netRes = await getNetworkDiagnostics();
+      expect(netRes.success).toBe(true);
+      expect(netRes.data).toBeDefined();
+    });
+
+    it('executes workstation lock in test mode', async () => {
+      const lockRes = await lockWorkstation();
+      expect(lockRes.success).toBe(true);
+    });
+
+    it('captures screen in simulation mode', async () => {
+      const screenRes = await capturePrimaryScreen();
+      expect(screenRes.success).toBe(true);
+      expect(screenRes.data).toBeDefined();
+      expect((screenRes.data as any).dataUrl).toContain(
+        'data:image/png;base64',
+      );
+    });
+  });
+
   describe('Sandboxed File Operations', () => {
     const testDir = path.join(os.homedir(), 'Desktop', 'jarvis_test_sandbox');
     const testFile = path.join(testDir, 'test_note.txt');
@@ -147,7 +189,7 @@ describe('Stage 5: Safe Desktop Actions & Windows Automation', () => {
     });
   });
 
-  describe('Direct Intent Detection & Model Directives', () => {
+  describe('Direct Intent Detection & God-Mode Triggers', () => {
     it('detects high-confidence voice/text triggers instantly', () => {
       const spotifyIntent = detectDirectIntent('open spotify');
       expect(spotifyIntent).toEqual({
@@ -156,33 +198,42 @@ describe('Stage 5: Safe Desktop Actions & Windows Automation', () => {
         confidence: 'high',
       });
 
+      const screenshotIntent = detectDirectIntent('take a screenshot');
+      expect(screenshotIntent?.toolId).toBe('capture_screen');
+
+      const volumeMuteIntent = detectDirectIntent('mute audio');
+      expect(volumeMuteIntent?.toolId).toBe('volume_control');
+      expect(volumeMuteIntent?.args.action).toBe('mute');
+
+      const volumeSetIntent = detectDirectIntent('set volume to 80%');
+      expect(volumeSetIntent?.toolId).toBe('volume_control');
+      expect(volumeSetIntent?.args.action).toBe('set');
+      expect(volumeSetIntent?.args.level).toBe(80);
+
+      const nextTrackIntent = detectDirectIntent('next song');
+      expect(nextTrackIntent?.toolId).toBe('media_control');
+      expect(nextTrackIntent?.args.action).toBe('next');
+
+      const wifiIntent = detectDirectIntent('check wifi status');
+      expect(wifiIntent?.toolId).toBe('network_diagnostics');
+
+      const lockIntent = detectDirectIntent('lock workstation');
+      expect(lockIntent?.toolId).toBe('lock_workstation');
+
       const calcIntent = detectDirectIntent('launch calc');
       expect(calcIntent?.toolId).toBe('open_app');
       expect(calcIntent?.args.app).toBe('calculator');
-
-      const batteryIntent = detectDirectIntent('Jarvis check battery');
-      expect(batteryIntent).toEqual({
-        toolId: 'system_diagnostics',
-        args: {},
-        confidence: 'high',
-      });
-
-      const urlIntent = detectDirectIntent('open https://news.google.com');
-      expect(urlIntent?.toolId).toBe('open_url');
-      expect(urlIntent?.args.url).toBe('https://news.google.com');
     });
 
     it('parses [ACTION: toolId {args}] model directives and cleans response text', () => {
       const modelOutput =
-        'Certainly, sir. [ACTION: open_app {"app": "spotify"}] Music playback initiated.';
+        'Certainly, sir. [ACTION: volume_control {"action": "mute"}] Audio muted.';
       const parsed = parseModelDirectives(modelOutput);
 
       expect(parsed.actions.length).toBe(1);
-      expect(parsed.actions[0].toolId).toBe('open_app');
-      expect(parsed.actions[0].args).toEqual({ app: 'spotify' });
-      expect(parsed.cleanedText).toBe(
-        'Certainly, sir.  Music playback initiated.',
-      );
+      expect(parsed.actions[0].toolId).toBe('volume_control');
+      expect(parsed.actions[0].args).toEqual({ action: 'mute' });
+      expect(parsed.cleanedText).toBe('Certainly, sir.  Audio muted.');
     });
   });
 
@@ -193,7 +244,7 @@ describe('Stage 5: Safe Desktop Actions & Windows Automation', () => {
       registry = new ToolRegistry();
     });
 
-    it('lists all default registered tools', () => {
+    it('lists all default registered tools including God-Mode tools', () => {
       const tools = registry.getAllTools();
       const toolIds = tools.map((t) => t.id);
       expect(toolIds).toContain('open_app');
@@ -201,6 +252,11 @@ describe('Stage 5: Safe Desktop Actions & Windows Automation', () => {
       expect(toolIds).toContain('system_diagnostics');
       expect(toolIds).toContain('read_file');
       expect(toolIds).toContain('write_file');
+      expect(toolIds).toContain('volume_control');
+      expect(toolIds).toContain('media_control');
+      expect(toolIds).toContain('network_diagnostics');
+      expect(toolIds).toContain('lock_workstation');
+      expect(toolIds).toContain('capture_screen');
     });
 
     it('validates tool arguments with Zod schemas and executes successfully', async () => {

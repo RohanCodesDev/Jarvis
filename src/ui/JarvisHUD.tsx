@@ -20,6 +20,11 @@ import { CommsDrawer } from './drawer/CommsDrawer';
 import { SettingsModal } from './modals/SettingsModal';
 import { MemoryViewer } from './modals/MemoryViewer';
 import {
+  TacticalActionCard,
+  type TacticalCardData,
+} from './hud/TacticalActionCard';
+import { soundFX } from './audio/soundFX';
+import {
   VoiceCoordinator,
   type StreamingSpeechHandle,
 } from '../services/voice/voiceCoordinator';
@@ -30,6 +35,9 @@ export const JarvisHUD: React.FC = () => {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [memoryOpen, setMemoryOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [tacticalCard, setTacticalCard] = useState<TacticalCardData | null>(
+    null,
+  );
 
   const [settings, setSettings] = useState<JarvisSettings>({
     cloudProvider: 'openrouter',
@@ -220,6 +228,29 @@ export const JarvisHUD: React.FC = () => {
     if (window.jarvisDesktop?.onActivityEvent) {
       const unsub = window.jarvisDesktop.onActivityEvent((act) => {
         setActivities((prev) => [...prev.slice(-25), act]);
+
+        if (act.category === 'tool' || act.category === 'security') {
+          if (settings.soundEffects) {
+            if (act.level === 'warn' || act.level === 'error') {
+              soundFX.playAlertTone();
+            } else {
+              soundFX.playActionSuccess();
+            }
+          }
+
+          setTacticalCard({
+            id: act.id,
+            title:
+              act.category === 'tool'
+                ? 'Tactical Action Executed'
+                : 'Security Protocol',
+            message: act.message,
+            category: act.category,
+            level: act.level,
+            durationMs: act.durationMs,
+            imageUrl: act.imageUrl,
+          });
+        }
       });
       return () => {
         unsub();
@@ -553,6 +584,10 @@ export const JarvisHUD: React.FC = () => {
       'Whisper recording active. Speak your directive, then click mic again to process...',
     );
 
+    if (settings.soundEffects) {
+      soundFX.playArmChime();
+    }
+
     voiceCoordinatorRef.current.startListening({
       onStateChange: (st) => {
         if (st === 'listening') setAssistantState('listening');
@@ -837,6 +872,12 @@ export const JarvisHUD: React.FC = () => {
         onAddMemory={handleAddMemory}
         onDeleteMemory={handleDeleteMemory}
         onUpdateMemory={handleUpdateMemory}
+      />
+
+      {/* 6. Holographic Tactical Action Overlay */}
+      <TacticalActionCard
+        card={tacticalCard}
+        onDismiss={() => setTacticalCard(null)}
       />
     </div>
   );

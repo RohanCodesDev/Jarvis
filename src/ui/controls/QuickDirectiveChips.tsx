@@ -6,11 +6,12 @@ interface QuickDirectiveChipsProps {
 }
 
 const DIRECTIVES = [
-  { label: 'Diagnostics', cmd: 'Run complete desktop telemetry diagnostics' },
-  { label: 'Memory Bank', cmd: 'Inspect memory banks' },
-  { label: 'Security Check', cmd: 'Perform security diagnostics' },
-  { label: 'Audio Harmonic', cmd: 'Harmonic carrier frequencies check' },
-  { label: 'Purge Context', cmd: 'clear context' },
+  { label: 'Screenshot', cmd: 'take screenshot' },
+  { label: 'Mute/Unmute', cmd: 'mute' },
+  { label: 'WiFi Telemetry', cmd: 'check wifi' },
+  { label: 'Battery Status', cmd: 'check battery' },
+  { label: 'Diagnostics', cmd: 'system diagnostics' },
+  { label: 'Lock PC', cmd: 'lock pc' },
 ];
 
 export const QuickDirectiveChips: React.FC<QuickDirectiveChipsProps> = ({

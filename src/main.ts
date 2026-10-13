@@ -305,6 +305,8 @@ function setupIpcHandlers() {
             level: actionResult.success ? 'success' : 'warn',
             category: 'tool',
             message: actionResult.message,
+            durationMs: actionResult.durationMs,
+            imageUrl: (actionResult.data as any)?.dataUrl,
           });
         }
       } catch (toolErr) {
@@ -367,6 +369,8 @@ function setupIpcHandlers() {
                   level: res.success ? 'success' : 'warn',
                   category: 'tool',
                   message: res.message,
+                  durationMs: res.durationMs,
+                  imageUrl: (res.data as any)?.dataUrl,
                 });
               }
             } catch (actErr) {

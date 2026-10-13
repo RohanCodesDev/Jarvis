@@ -8,6 +8,15 @@ import { launchApp, APPROVED_APPS } from './appLauncher';
 import { openWebUrl } from './urlLauncher';
 import { getSystemDiagnostics } from './systemStatsTool';
 import { readSafeFile, createSafeFile } from './fileTools';
+import {
+  controlVolume,
+  controlMedia,
+  type VolumeAction,
+  type MediaPlaybackAction,
+} from './mediaTools';
+import { getNetworkDiagnostics } from './networkTools';
+import { lockWorkstation } from './systemControlTools';
+import { capturePrimaryScreen } from './screenCaptureTool';
 
 export class ToolRegistry {
   private tools = new Map<string, ToolDefinition<any>>();
@@ -89,6 +98,75 @@ export class ToolRegistry {
       }),
       execute: async (args: { filePath: string; content: string }) => {
         return await createSafeFile(args.filePath, args.content);
+      },
+    });
+
+    // 6. System Master Volume
+    this.registerTool({
+      id: 'volume_control',
+      name: 'System Volume Control',
+      description:
+        'Adjusts master Windows volume (mute, unmute, volume up, volume down, or set to percentage).',
+      permission: 'low_risk',
+      schema: z.object({
+        action: z.enum(['mute', 'unmute', 'up', 'down', 'set']),
+        level: z.number().min(0).max(100).optional(),
+      }),
+      execute: async (args: { action: VolumeAction; level?: number }) => {
+        return await controlVolume(args.action, args.level);
+      },
+    });
+
+    // 7. Media Playback Control
+    this.registerTool({
+      id: 'media_control',
+      name: 'Media Playback Control',
+      description:
+        'Sends virtual media key commands (play/pause, next track, previous track, stop).',
+      permission: 'low_risk',
+      schema: z.object({
+        action: z.enum(['play_pause', 'next', 'previous', 'stop']),
+      }),
+      execute: async (args: { action: MediaPlaybackAction }) => {
+        return await controlMedia(args.action);
+      },
+    });
+
+    // 8. Network & Connectivity Diagnostics
+    this.registerTool({
+      id: 'network_diagnostics',
+      name: 'Network Diagnostics',
+      description:
+        'Checks active network adapter profile, Wi-Fi SSID, and internet ping latency.',
+      permission: 'low_risk',
+      schema: z.object({}).catchall(z.unknown()),
+      execute: async () => {
+        return await getNetworkDiagnostics();
+      },
+    });
+
+    // 9. Workstation Lock
+    this.registerTool({
+      id: 'lock_workstation',
+      name: 'Lock Windows Workstation',
+      description: 'Safely locks the Windows user session.',
+      permission: 'low_risk',
+      schema: z.object({}).catchall(z.unknown()),
+      execute: async () => {
+        return await lockWorkstation();
+      },
+    });
+
+    // 10. Screen Capture
+    this.registerTool({
+      id: 'capture_screen',
+      name: 'Capture Primary Display',
+      description:
+        'Captures a full-resolution screenshot of the screen and saves it to Desktop/JARVIS_Screenshots.',
+      permission: 'low_risk',
+      schema: z.object({}).catchall(z.unknown()),
+      execute: async () => {
+        return await capturePrimaryScreen();
       },
     });
   }
@@ -197,32 +275,41 @@ export class ToolRegistry {
 
   public getToolPromptDocumentation(): string {
     return `### AVAILABLE SYSTEM TOOLS:
-You have access to safe, sandboxed desktop tools. When the user requests an action that requires a tool, output a single-line command directive in the format:
+You have access to safe, sandboxed desktop tools. When the user requests an action, output a single-line command directive:
 [ACTION: tool_id {"param1": "value"}]
 
-1. open_app: Launch an approved desktop app.
-   - Parameters: {"app": "spotify" | "chrome" | "vscode" | "notepad" | "calculator" | "terminal" | "settings" | "explorer" | "taskmanager"}
-   - Example: [ACTION: open_app {"app": "spotify"}]
+1. open_app: Launch an approved desktop app (spotify, chrome, edge, vscode, notepad, calculator, terminal, powershell, explorer, settings, taskmanager).
+   - [ACTION: open_app {"app": "spotify"}]
 
-2. open_url: Open a verified HTTP/HTTPS URL in the default browser.
-   - Parameters: {"url": "https://github.com"}
-   - Example: [ACTION: open_url {"url": "https://youtube.com"}]
+2. open_url: Open a web URL.
+   - [ACTION: open_url {"url": "https://github.com"}]
 
-3. system_diagnostics: Check system battery %, RAM usage, CPU model, and uptime.
-   - Parameters: {}
-   - Example: [ACTION: system_diagnostics {}]
+3. system_diagnostics: Check battery %, RAM usage, CPU model, and uptime.
+   - [ACTION: system_diagnostics {}]
 
-4. read_file: Read a text file from approved user folders (Desktop, Documents, Downloads).
-   - Parameters: {"filePath": "C:\\Users\\...\\file.txt"}
-   - Example: [ACTION: read_file {"filePath": "notes.txt"}]
+4. volume_control: Adjust or mute system volume.
+   - Actions: "mute" | "unmute" | "up" | "down" | "set"
+   - [ACTION: volume_control {"action": "mute"}]
+   - [ACTION: volume_control {"action": "set", "level": 50}]
 
-5. write_file: Create or save a file (.txt, .md, .json, .csv, .log).
-   - Parameters: {"filePath": "report.txt", "content": "..."}
-   - Example: [ACTION: write_file {"filePath": "memo.txt", "content": "Meeting notes"}]
+5. media_control: Control media playback.
+   - Actions: "play_pause" | "next" | "previous" | "stop"
+   - [ACTION: media_control {"action": "next"}]
 
-IMPORTANT RULES:
-- Never claim you performed an action without outputting the [ACTION: ...] directive.
-- If the user asks you to open an application or check the battery, execute the corresponding action.`;
+6. network_diagnostics: Check Wi-Fi SSID, internet ping latency, and connection.
+   - [ACTION: network_diagnostics {}]
+
+7. capture_screen: Take a full screenshot and save to Desktop.
+   - [ACTION: capture_screen {}]
+
+8. lock_workstation: Lock Windows workstation.
+   - [ACTION: lock_workstation {}]
+
+9. read_file: Read a text file from approved folders.
+   - [ACTION: read_file {"filePath": "notes.txt"}]
+
+10. write_file: Save a file (.txt, .md, .json, .csv, .log).
+    - [ACTION: write_file {"filePath": "memo.txt", "content": "Meeting notes"}]`;
   }
 }
 
