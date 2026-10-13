@@ -27,7 +27,6 @@ export const JarvisHUD: React.FC = () => {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [memoryOpen, setMemoryOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [wakeWordActive, setWakeWordActive] = useState(false);
 
   const [settings, setSettings] = useState<JarvisSettings>({
     cloudProvider: 'openrouter',
@@ -544,7 +543,6 @@ export const JarvisHUD: React.FC = () => {
 
     if (!isEnabled) {
       wakeWordDetector.stop();
-      setWakeWordActive(false);
       return;
     }
 
@@ -565,9 +563,6 @@ export const JarvisHUD: React.FC = () => {
               handleVoiceInputTriggerRef.current();
             });
           }
-        },
-        onStatusChange: (active) => {
-          setWakeWordActive(active);
         },
         onError: (err) => {
           addActivity('warn', 'voice', `Wake-word: ${err}`);
@@ -657,7 +652,9 @@ export const JarvisHUD: React.FC = () => {
         onSelectTheme={handleSelectTheme}
         onToggleMic={handleToggleMic}
         onToggleSpeaker={handleToggleSpeaker}
-        wakeWordActive={wakeWordActive}
+        wakeWordActive={
+          settings.wakeWordEnabled !== false && telemetry.micEnabled
+        }
         onToggleWakeWord={handleToggleWakeWord}
         onOpenSettings={() => setSettingsOpen(true)}
         onOpenMemory={() => setMemoryOpen(true)}

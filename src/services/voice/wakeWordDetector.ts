@@ -1,45 +1,11 @@
 /**
- * Hands-Free Wake-Word Detector for J.A.R.V.I.S.
- * Continuously listens in the background for "Hey Jarvis" / "Jarvis" activation
- * and triggers voice interaction without requiring button clicks.
+ * Autonomous Hands-Free Wake-Word Detector for J.A.R.V.I.S.
+ * Uses low-overhead Web Audio VAD (Voice Activity Detection) + Groq Whisper
+ * to spot "Hey Jarvis" activation without network-blocked SpeechRecognition loops.
  */
-
-// Ambient types for Web Speech API recognition
-interface IWindowWithSpeech extends Window {
-  SpeechRecognition?: new () => ISpeechRecognition;
-  webkitSpeechRecognition?: new () => ISpeechRecognition;
-}
-
-interface ISpeechRecognition extends EventTarget {
-  continuous: boolean;
-  interimResults: boolean;
-  lang: string;
-  start: () => void;
-  stop: () => void;
-  abort: () => void;
-  onresult: ((event: ISpeechEvent) => void) | null;
-  onerror: ((event: { error: string }) => void) | null;
-  onend: (() => void) | null;
-  onstart: (() => void) | null;
-}
-
-interface ISpeechEvent {
-  resultIndex: number;
-  results: {
-    length: number;
-    [index: number]: {
-      isFinal: boolean;
-      [index: number]: {
-        transcript: string;
-        confidence: number;
-      };
-    };
-  };
-}
 
 export interface WakeWordCallbacks {
   onWakeWordDetected: (directive?: string) => void;
-  onStatusChange?: (isListening: boolean) => void;
   onError?: (error: string) => void;
 }
 
@@ -49,17 +15,33 @@ const WAKE_PATTERNS = [
 ];
 
 export class WakeWordDetector {
-  private recognition: ISpeechRecognition | null = null;
   private isRunning = false;
   private isPaused = false;
+  private isProcessing = false;
   private callbacks: WakeWordCallbacks | null = null;
-  private restartTimeout: ReturnType<typeof setTimeout> | null = null;
-  private consecutiveErrors = 0;
+
+  private stream: MediaStream | null = null;
+  private audioCtx: AudioContext | null = null;
+  private analyser: AnalyserNode | null = null;
+  private monitorInterval: ReturnType<typeof setInterval> | null = null;
+
+  private mediaRecorder: MediaRecorder | null = null;
+  private recordedChunks: Blob[] = [];
+  private isSpeechActive = false;
+  private silenceFrames = 0;
+  private speechFrames = 0;
 
   public isSupported(): boolean {
-    if (typeof window === 'undefined') return false;
-    const win = window as unknown as IWindowWithSpeech;
-    return !!(win.SpeechRecognition || win.webkitSpeechRecognition);
+    return (
+      typeof window !== 'undefined' &&
+      typeof navigator !== 'undefined' &&
+      !!navigator.mediaDevices?.getUserMedia &&
+      typeof (
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext: typeof AudioContext })
+          .webkitAudioContext
+      ) !== 'undefined'
+    );
   }
 
   public isActive(): boolean {
@@ -69,20 +51,18 @@ export class WakeWordDetector {
   /**
    * Start passive always-on wake-word monitoring.
    */
-  public start(callbacks: WakeWordCallbacks): void {
+  public async start(callbacks: WakeWordCallbacks): Promise<void> {
     if (!this.isSupported()) {
-      callbacks.onError?.(
-        'Speech recognition is not supported in this runtime.',
-      );
+      callbacks.onError?.('Audio capture is not supported in this runtime.');
       return;
     }
 
     this.callbacks = callbacks;
     this.isRunning = true;
     this.isPaused = false;
-    this.consecutiveErrors = 0;
+    this.isProcessing = false;
 
-    this.initRecognition();
+    await this.initVAD();
   }
 
   /**
@@ -90,16 +70,7 @@ export class WakeWordDetector {
    */
   public pause(): void {
     this.isPaused = true;
-    if (this.restartTimeout) {
-      clearTimeout(this.restartTimeout);
-      this.restartTimeout = null;
-    }
-    if (this.recognition) {
-      try {
-        this.recognition.abort();
-      } catch {}
-    }
-    this.callbacks?.onStatusChange?.(false);
+    this.resetRecordingState();
   }
 
   /**
@@ -108,131 +79,265 @@ export class WakeWordDetector {
   public resume(): void {
     if (!this.isRunning) return;
     this.isPaused = false;
-    this.scheduleRestart(200);
+    this.isProcessing = false;
+    this.resetRecordingState();
   }
 
   /**
-   * Stop wake-word detection completely.
+   * Stop wake-word detection completely and release microphone.
    */
   public stop(): void {
     this.isRunning = false;
     this.isPaused = false;
-    if (this.restartTimeout) {
-      clearTimeout(this.restartTimeout);
-      this.restartTimeout = null;
+    this.isProcessing = false;
+    this.resetRecordingState();
+
+    if (this.monitorInterval) {
+      clearInterval(this.monitorInterval);
+      this.monitorInterval = null;
     }
-    if (this.recognition) {
-      try {
-        this.recognition.abort();
-      } catch {}
-      this.recognition = null;
+
+    if (this.stream) {
+      this.stream.getTracks().forEach((t) => t.stop());
+      this.stream = null;
     }
-    this.callbacks?.onStatusChange?.(false);
+
+    if (this.audioCtx) {
+      this.audioCtx.close().catch(() => {});
+      this.audioCtx = null;
+    }
+
+    this.analyser = null;
     this.callbacks = null;
   }
 
-  private initRecognition(): void {
-    if (!this.isRunning || this.isPaused) return;
-
-    const win = window as unknown as IWindowWithSpeech;
-    const RecognitionClass =
-      win.SpeechRecognition || win.webkitSpeechRecognition;
-
-    if (!RecognitionClass) return;
-
+  private async initVAD(): Promise<void> {
     try {
-      if (this.recognition) {
-        try {
-          this.recognition.abort();
-        } catch {}
-        this.recognition = null;
+      if (this.stream) {
+        this.stream.getTracks().forEach((t) => t.stop());
+        this.stream = null;
       }
 
-      const instance = new RecognitionClass();
-      instance.continuous = true;
-      instance.interimResults = true;
-      instance.lang = 'en-US';
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+      });
 
-      instance.onstart = () => {
-        this.consecutiveErrors = 0;
-        this.callbacks?.onStatusChange?.(true);
-      };
+      if (!this.isRunning) {
+        stream.getTracks().forEach((t) => t.stop());
+        return;
+      }
 
-      instance.onresult = (event: ISpeechEvent) => {
-        if (this.isPaused || !this.isRunning) return;
+      this.stream = stream;
 
-        let accumulated = '';
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          const item = event.results[i];
-          if (item && item[0]) {
-            accumulated += ' ' + item[0].transcript;
-          }
-        }
+      const AudioContextClass =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext: typeof AudioContext })
+          .webkitAudioContext;
 
-        const trimmed = accumulated.trim();
-        if (!trimmed) return;
+      const audioCtx = new AudioContextClass();
+      const source = audioCtx.createMediaStreamSource(stream);
+      const analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 512;
+      analyser.smoothingTimeConstant = 0.3;
+      source.connect(analyser);
 
-        for (const pattern of WAKE_PATTERNS) {
-          const match = trimmed.match(pattern);
-          if (match) {
-            const trailing = (match[1] || '').trim();
-            // Pause immediately to avoid self-triggering
-            this.pause();
-            this.callbacks?.onWakeWordDetected(trailing || undefined);
-            return;
-          }
-        }
-      };
+      this.audioCtx = audioCtx;
+      this.analyser = analyser;
 
-      instance.onerror = (event: { error: string }) => {
-        if (event.error === 'no-speech' || event.error === 'aborted') {
-          return;
-        }
-
-        this.consecutiveErrors++;
-        if (event.error === 'not-allowed') {
-          this.callbacks?.onError?.(
-            'Microphone access denied for wake-word sentinel.',
-          );
-          this.stop();
-          return;
-        }
-
-        // Backoff restart on repeated errors
-        const delay = Math.min(
-          1000 * Math.pow(1.5, this.consecutiveErrors),
-          8000,
-        );
-        this.scheduleRestart(delay);
-      };
-
-      instance.onend = () => {
-        this.callbacks?.onStatusChange?.(false);
-        if (this.isRunning && !this.isPaused) {
-          this.scheduleRestart(350);
-        }
-      };
-
-      this.recognition = instance;
-      instance.start();
+      this.startAudioLoop();
     } catch (err: unknown) {
-      console.warn('[WakeWordDetector] Start error:', err);
-      this.scheduleRestart(2000);
+      const msg = err instanceof Error ? err.message : String(err);
+      this.callbacks?.onError?.(`Microphone access error: ${msg}`);
+      this.stop();
     }
   }
 
-  private scheduleRestart(delayMs: number): void {
-    if (this.restartTimeout) {
-      clearTimeout(this.restartTimeout);
+  private startAudioLoop(): void {
+    if (this.monitorInterval) {
+      clearInterval(this.monitorInterval);
     }
-    if (!this.isRunning || this.isPaused) return;
 
-    this.restartTimeout = setTimeout(() => {
-      this.restartTimeout = null;
-      if (this.isRunning && !this.isPaused) {
-        this.initRecognition();
+    const dataArray = new Uint8Array(256);
+
+    // Monitor audio energy every 80ms (virtually 0% CPU footprint)
+    this.monitorInterval = setInterval(() => {
+      if (
+        !this.isRunning ||
+        this.isPaused ||
+        this.isProcessing ||
+        !this.analyser
+      ) {
+        return;
       }
-    }, delayMs);
+
+      this.analyser.getByteFrequencyData(dataArray);
+
+      // Calculate root-mean-square energy
+      let sum = 0;
+      for (let i = 0; i < dataArray.length; i++) {
+        const val = dataArray[i] / 128.0 - 1.0;
+        sum += val * val;
+      }
+      const rms = Math.sqrt(sum / dataArray.length);
+
+      const ENERGY_THRESHOLD = 0.045;
+
+      if (rms > ENERGY_THRESHOLD) {
+        this.speechFrames++;
+        this.silenceFrames = 0;
+
+        // When speech is detected for > 150ms, start collecting audio segment
+        if (this.speechFrames >= 2 && !this.isSpeechActive) {
+          this.isSpeechActive = true;
+          this.startSegmentRecording();
+        }
+      } else if (this.isSpeechActive) {
+        this.silenceFrames++;
+
+        // When user pauses for ~400ms (5 frames of silence), finish the speech burst
+        if (this.silenceFrames >= 5) {
+          this.isSpeechActive = false;
+          this.finishSegmentRecording();
+        }
+      }
+    }, 80);
+  }
+
+  private startSegmentRecording(): void {
+    if (!this.stream) return;
+
+    try {
+      this.recordedChunks = [];
+      let mimeType = 'audio/webm;codecs=opus';
+      if (
+        typeof MediaRecorder !== 'undefined' &&
+        !MediaRecorder.isTypeSupported(mimeType)
+      ) {
+        mimeType = MediaRecorder.isTypeSupported('audio/webm')
+          ? 'audio/webm'
+          : '';
+      }
+
+      const recorder = new MediaRecorder(
+        this.stream,
+        mimeType ? { mimeType } : undefined,
+      );
+      this.mediaRecorder = recorder;
+
+      recorder.ondataavailable = (event) => {
+        if (event.data && event.data.size > 0) {
+          this.recordedChunks.push(event.data);
+        }
+      };
+
+      recorder.start();
+
+      // Auto-cap single wake-word attempt at 3.5 seconds
+      setTimeout(() => {
+        if (this.isSpeechActive && this.mediaRecorder?.state === 'recording') {
+          this.isSpeechActive = false;
+          this.finishSegmentRecording();
+        }
+      }, 3500);
+    } catch (recErr) {
+      console.warn('[WakeWordDetector] Segment recorder error:', recErr);
+      this.resetRecordingState();
+    }
+  }
+
+  private finishSegmentRecording(): void {
+    if (!this.mediaRecorder || this.mediaRecorder.state !== 'recording') {
+      this.resetRecordingState();
+      return;
+    }
+
+    const recorder = this.mediaRecorder;
+    recorder.onstop = async () => {
+      try {
+        const blob = new Blob(this.recordedChunks, {
+          type: recorder.mimeType || 'audio/webm',
+        });
+
+        // Ignore tiny accidental noise clicks (< 1500 bytes)
+        if (blob.size < 1500) {
+          this.resetRecordingState();
+          return;
+        }
+
+        await this.verifyWakeWordWithWhisper(blob);
+      } catch {
+        this.resetRecordingState();
+      }
+    };
+
+    try {
+      recorder.stop();
+    } catch {
+      this.resetRecordingState();
+    }
+  }
+
+  private async verifyWakeWordWithWhisper(blob: Blob): Promise<void> {
+    if (!window.jarvisDesktop?.transcribeAudio) {
+      this.resetRecordingState();
+      return;
+    }
+
+    this.isProcessing = true;
+
+    try {
+      // Encode blob to base64
+      const reader = new FileReader();
+      const base64Audio = await new Promise<string>((resolve, reject) => {
+        reader.onloadend = () => {
+          const res = reader.result as string;
+          resolve(res.includes(',') ? res.split(',')[1] : res);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+
+      const transcription = await window.jarvisDesktop.transcribeAudio({
+        base64Audio,
+        format: 'webm',
+      });
+
+      const text = (transcription.text || '').trim();
+
+      if (text) {
+        for (const pattern of WAKE_PATTERNS) {
+          const match = text.match(pattern);
+          if (match) {
+            const directive = (match[1] || '').trim();
+            this.pause();
+            this.callbacks?.onWakeWordDetected(directive || undefined);
+            return;
+          }
+        }
+      }
+    } catch {
+      // Silent pass for non-matching speech bursts
+    } finally {
+      this.isProcessing = false;
+      this.resetRecordingState();
+    }
+  }
+
+  private resetRecordingState(): void {
+    this.isSpeechActive = false;
+    this.speechFrames = 0;
+    this.silenceFrames = 0;
+    this.recordedChunks = [];
+    if (this.mediaRecorder && this.mediaRecorder.state === 'recording') {
+      try {
+        this.mediaRecorder.stop();
+      } catch {}
+    }
+    this.mediaRecorder = null;
   }
 }
 
