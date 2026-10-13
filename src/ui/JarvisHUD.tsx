@@ -19,7 +19,10 @@ import { TacticalTelemetryStream } from './hud/TacticalTelemetryStream';
 import { CommsDrawer } from './drawer/CommsDrawer';
 import { SettingsModal } from './modals/SettingsModal';
 import { MemoryViewer } from './modals/MemoryViewer';
-import { VoiceCoordinator } from '../services/voice/voiceCoordinator';
+import {
+  VoiceCoordinator,
+  type StreamingSpeechHandle,
+} from '../services/voice/voiceCoordinator';
 import { wakeWordDetector } from '../services/voice/wakeWordDetector';
 
 export const JarvisHUD: React.FC = () => {
@@ -353,6 +356,30 @@ export const JarvisHUD: React.FC = () => {
           ? settings.groqModel || undefined
           : settings.openRouterModel;
 
+      let speechHandle: StreamingSpeechHandle | null = null;
+      if (telemetry.speakerEnabled && settings.speechEnabled) {
+        speechHandle = voiceCoordinatorRef.current.startStreamingSpeech(
+          {
+            onStateChange: (st) => {
+              if (st === 'speaking') setAssistantState('speaking');
+              else if (st === 'idle') setAssistantState('idle');
+              else if (st === 'error') setAssistantState('error');
+            },
+            onError: (err) => {
+              addActivity('warn', 'voice', err);
+            },
+          },
+          {
+            voiceGender: settings.voiceGender,
+            rate: 1.05,
+            pitch: 0.96,
+          },
+          () => {
+            setAssistantState('idle');
+          },
+        );
+      }
+
       const cleanup = window.jarvisDesktop.sendChatMessage(
         {
           streamId,
@@ -371,6 +398,9 @@ export const JarvisHUD: React.FC = () => {
                   : m,
               ),
             );
+            if (speechHandle) {
+              speechHandle.feedChunk(event.chunk);
+            }
           }
 
           if (event.done) {
@@ -379,6 +409,10 @@ export const JarvisHUD: React.FC = () => {
             const finalText = event.fullResponse || accumulated;
 
             if (event.error) {
+              if (speechHandle) {
+                speechHandle.cancel();
+                speechHandle = null;
+              }
               setAssistantState('error');
               setMessages((prev) =>
                 prev.map((m) =>
@@ -412,9 +446,11 @@ export const JarvisHUD: React.FC = () => {
                 ),
               );
               addActivity('success', 'ai', `Stream concluded (${elapsed}ms).`);
-              speakText(finalText, () => {
+              if (speechHandle) {
+                speechHandle.finish();
+              } else {
                 setAssistantState('idle');
-              });
+              }
             }
           }
         },

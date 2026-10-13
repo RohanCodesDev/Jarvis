@@ -231,3 +231,129 @@ describe('Stage 3: Voice Interaction - WhisperTranscriber', () => {
     expect(result.error).toContain('Whisper transcription failed (500)');
   });
 });
+
+describe('Stage 3 Upgrade: Streaming Sentence Pipeline & Voice Pipelining', () => {
+  it('correctly splits sentences on punctuation and newlines', async () => {
+    const { splitNextSentence } =
+      await import('../src/services/voice/voiceCoordinator');
+
+    const input =
+      'Good evening, sir. All telemetry arrays are reporting optimal efficiency! Would you like me to run Dr. Banner diagnostics on version 3.14? Yes, sir.';
+
+    let buf = input;
+    const sentences: string[] = [];
+    let res: { sentence: string; remainder: string } | null;
+
+    while ((res = splitNextSentence(buf, true))) {
+      sentences.push(res.sentence);
+      buf = res.remainder;
+      if (!buf) break;
+    }
+
+    expect(sentences).toEqual([
+      'Good evening, sir.',
+      'All telemetry arrays are reporting optimal efficiency!',
+      'Would you like me to run Dr. Banner diagnostics on version 3.14?',
+      'Yes, sir.',
+    ]);
+  });
+
+  it('streams sentences incrementally as token chunks arrive', async () => {
+    const { VoiceCoordinator } =
+      await import('../src/services/voice/voiceCoordinator');
+
+    const mockSynth = {
+      isSupported: vi.fn().mockReturnValue(true),
+      speak: vi.fn(),
+      stop: vi.fn(),
+      isSpeaking: vi.fn().mockReturnValue(false),
+      getVoices: vi.fn().mockReturnValue([]),
+      enqueueSentence: vi.fn(),
+      finishQueue: vi.fn().mockImplementation((onComplete) => onComplete?.()),
+    };
+
+    const mockRec = {
+      isSupported: vi.fn().mockReturnValue(true),
+      start: vi.fn(),
+      stop: vi.fn(),
+      abort: vi.fn(),
+      isListening: vi.fn().mockReturnValue(false),
+    };
+
+    const coordinator = new VoiceCoordinator(mockRec, mockSynth);
+    const onStateChange = vi.fn();
+    const onError = vi.fn();
+    const onComplete = vi.fn();
+
+    const handle = coordinator.startStreamingSpeech(
+      { onStateChange, onError },
+      { voiceGender: 'male' },
+      onComplete,
+    );
+
+    expect(coordinator.getState()).toBe('speaking');
+
+    // Feed chunk 1
+    handle.feedChunk('Good evening, ');
+    expect(mockSynth.enqueueSentence).not.toHaveBeenCalled();
+
+    // Feed chunk 2 (sentence boundary)
+    handle.feedChunk('sir. All systems ');
+    expect(mockSynth.enqueueSentence).toHaveBeenCalledWith(
+      'Good evening, sir.',
+      expect.anything(),
+      undefined,
+      expect.anything(),
+    );
+
+    // Feed chunk 3 & finish
+    handle.feedChunk('green.');
+    handle.finish();
+
+    expect(mockSynth.enqueueSentence).toHaveBeenCalledWith(
+      'All systems green.',
+      expect.anything(),
+      undefined,
+      expect.anything(),
+    );
+    expect(mockSynth.finishQueue).toHaveBeenCalled();
+    expect(onComplete).toHaveBeenCalled();
+    expect(coordinator.getState()).toBe('idle');
+  });
+
+  it('aborts streaming speech immediately upon halt', async () => {
+    const { VoiceCoordinator } =
+      await import('../src/services/voice/voiceCoordinator');
+
+    const mockSynth = {
+      isSupported: vi.fn().mockReturnValue(true),
+      speak: vi.fn(),
+      stop: vi.fn(),
+      isSpeaking: vi.fn().mockReturnValue(false),
+      getVoices: vi.fn().mockReturnValue([]),
+      enqueueSentence: vi.fn(),
+      finishQueue: vi.fn(),
+    };
+
+    const mockRec = {
+      isSupported: vi.fn().mockReturnValue(true),
+      start: vi.fn(),
+      stop: vi.fn(),
+      abort: vi.fn(),
+      isListening: vi.fn().mockReturnValue(false),
+    };
+
+    const coordinator = new VoiceCoordinator(mockRec, mockSynth);
+    const onStateChange = vi.fn();
+    const onError = vi.fn();
+
+    const handle = coordinator.startStreamingSpeech({ onStateChange, onError });
+    expect(coordinator.getState()).toBe('speaking');
+
+    handle.feedChunk('Partial speech chunk');
+    coordinator.halt();
+
+    expect(mockSynth.stop).toHaveBeenCalled();
+    expect(coordinator.getState()).toBe('idle');
+  });
+});

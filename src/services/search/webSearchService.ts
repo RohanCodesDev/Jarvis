@@ -197,8 +197,21 @@ export function extractSearchKeywords(rawQuery: string): string {
   return cleaned || rawQuery.trim();
 }
 
+interface SearchCacheEntry {
+  results: WebSearchResult[];
+  timestamp: number;
+}
+
+const SEARCH_CACHE_TTL_MS = 5 * 60 * 1000; // 5-minute freshness window
+const MAX_CACHE_ENTRIES = 50;
+const searchCache = new Map<string, SearchCacheEntry>();
+
+export function clearSearchCache(): void {
+  searchCache.clear();
+}
+
 /**
- * Execute silent, live web search via DuckDuckGo HTML endpoint with strict timeout.
+ * Execute silent, live web search via DuckDuckGo HTML endpoint with strict 2.0s timeout and LRU caching.
  */
 export async function searchWeb(
   rawQuery: string,
@@ -207,10 +220,20 @@ export async function searchWeb(
   const query = extractSearchKeywords(rawQuery);
   if (!query) return [];
 
+  const cacheKey = query.toLowerCase().trim();
+  const cached = searchCache.get(cacheKey);
+  if (cached && Date.now() - cached.timestamp < SEARCH_CACHE_TTL_MS) {
+    // Refresh LRU position
+    searchCache.delete(cacheKey);
+    searchCache.set(cacheKey, cached);
+    return cached.results;
+  }
+
   const url = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
 
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 4000);
+  // Strict 2.0s network ceiling to prevent dialogue stalls
+  const timeoutId = setTimeout(() => controller.abort(), 2000);
 
   try {
     const res = await fetch(url, {
@@ -259,6 +282,18 @@ export async function searchWeb(
       results.push({
         title: titles[i],
         snippet: snippets[i],
+      });
+    }
+
+    // Store in LRU cache
+    if (results.length > 0) {
+      if (searchCache.size >= MAX_CACHE_ENTRIES) {
+        const oldestKey = searchCache.keys().next().value;
+        if (oldestKey) searchCache.delete(oldestKey);
+      }
+      searchCache.set(cacheKey, {
+        results,
+        timestamp: Date.now(),
       });
     }
 

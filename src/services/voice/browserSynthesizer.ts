@@ -9,10 +9,22 @@ function detectScriptLanguage(text: string): string {
   return 'en';
 }
 
+interface QueuedUtterance {
+  text: string;
+  options?: SpeechSynthesisOptions;
+  onEnd?: () => void;
+  onError?: (error: string) => void;
+}
+
 export class BrowserSpeechSynthesizer implements ISpeechSynthesizer {
   private _isSpeaking = false;
   private currentUtterance: SpeechSynthesisUtterance | null = null;
   private voices: SpeechSynthesisVoice[] = [];
+  private queue: QueuedUtterance[] = [];
+  private isQueueProcessing = false;
+  private queueCompleteCallback: (() => void) | null = null;
+  private isQueueFinished = false;
+  private watchdogTimeout: number | null = null;
 
   constructor() {
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
@@ -53,7 +65,7 @@ export class BrowserSpeechSynthesizer implements ISpeechSynthesizer {
   }
 
   /**
-   * Select a preferred voice based on gender and language.
+   * Select a preferred voice with priority given to Windows 11 Natural / Neural voices.
    */
   private pickVoice(
     gender: 'male' | 'female' = 'male',
@@ -79,6 +91,19 @@ export class BrowserSpeechSynthesizer implements ISpeechSynthesizer {
           'naayf',
           'tarik',
         ];
+
+        // 1. Prioritize Windows 11 Natural / Neural / Online voices for cinematic voice quality
+        const naturalMatch = langMatches.find((v) => {
+          const n = v.name.toLowerCase();
+          const isNatural =
+            n.includes('natural') ||
+            n.includes('online') ||
+            n.includes('neural');
+          return isNatural && maleNames.some((name) => n.includes(name));
+        });
+        if (naturalMatch) return naturalMatch;
+
+        // 2. Standard installed male voices
         const match = langMatches.find((v) =>
           maleNames.some((name) => v.name.toLowerCase().includes(name)),
         );
@@ -96,6 +121,17 @@ export class BrowserSpeechSynthesizer implements ISpeechSynthesizer {
           'hoda',
           'salma',
         ];
+
+        const naturalMatch = langMatches.find((v) => {
+          const n = v.name.toLowerCase();
+          const isNatural =
+            n.includes('natural') ||
+            n.includes('online') ||
+            n.includes('neural');
+          return isNatural && femaleNames.some((name) => n.includes(name));
+        });
+        if (naturalMatch) return naturalMatch;
+
         const match = langMatches.find((v) =>
           femaleNames.some((name) => v.name.toLowerCase().includes(name)),
         );
@@ -108,22 +144,143 @@ export class BrowserSpeechSynthesizer implements ISpeechSynthesizer {
       return list[0] || null;
     }
 
-    // Do NOT force an English voice on non-English scripts if no matching voice is installed
     return null;
   }
 
   /**
-   * Clean text for natural pronunciation (remove markdown asterisks, hashes, code ticks).
+   * Clean text for acoustic voice delivery (strip markdown code, citations, asterisks, symbols).
    */
   private sanitizeForSpeech(text: string): string {
     return text
-      .replace(/[*_#`~[\]]/g, ' ')
+      .replace(/```[\s\S]*?```/g, ' ')
+      .replace(/`[^`]*`/g, ' ')
+      .replace(/\[(?:Source\s*\d+|\d+)\]/gi, '')
       .replace(/https?:\/\/\S+/g, 'link')
+      .replace(/[*_#~]/g, '')
+      .replace(/^[-*•]\s+/gm, '')
+      .replace(/&/g, ' and ')
+      .replace(/%/g, ' percent ')
+      .replace(/\+/g, ' plus ')
+      .replace(
+        /[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu,
+        '',
+      )
       .replace(/\s+/g, ' ')
       .trim();
   }
 
-  public speak(
+  private clearWatchdog(): void {
+    if (this.watchdogTimeout !== null) {
+      clearTimeout(this.watchdogTimeout);
+      this.watchdogTimeout = null;
+    }
+  }
+
+  private processNextInQueue(): void {
+    if (this.queue.length === 0) {
+      this.isQueueProcessing = false;
+      this._isSpeaking = false;
+      this.currentUtterance = null;
+      this.clearWatchdog();
+
+      if (this.isQueueFinished && this.queueCompleteCallback) {
+        const cb = this.queueCompleteCallback;
+        this.queueCompleteCallback = null;
+        this.isQueueFinished = false;
+        cb();
+      }
+      return;
+    }
+
+    const item = this.queue.shift();
+    if (!item) return;
+
+    this.isQueueProcessing = true;
+    this._isSpeaking = true;
+
+    try {
+      if (window.speechSynthesis.paused) {
+        window.speechSynthesis.resume();
+      }
+    } catch {}
+
+    try {
+      const utterance = new SpeechSynthesisUtterance(item.text);
+      this.currentUtterance = utterance;
+
+      const detectedLang = detectScriptLanguage(item.text);
+      const targetLang =
+        item.options?.lang || (detectedLang !== 'en' ? detectedLang : 'en');
+      utterance.lang =
+        targetLang === 'ar'
+          ? 'ar-SA'
+          : targetLang === 'hi'
+            ? 'hi-IN'
+            : targetLang === 'en'
+              ? 'en-US'
+              : targetLang;
+
+      const voice = this.pickVoice(
+        item.options?.voiceGender || 'male',
+        targetLang,
+      );
+      if (voice) {
+        utterance.voice = voice;
+      }
+
+      utterance.rate = item.options?.rate ?? 1.05;
+      utterance.pitch = item.options?.pitch ?? 0.96;
+      utterance.volume = item.options?.volume ?? 1.0;
+
+      utterance.onstart = () => {
+        this._isSpeaking = true;
+      };
+
+      const handleDone = () => {
+        this.clearWatchdog();
+        item.onEnd?.();
+        this.processNextInQueue();
+      };
+
+      utterance.onend = handleDone;
+
+      utterance.onerror = (e) => {
+        this.clearWatchdog();
+        try {
+          window.speechSynthesis.cancel();
+        } catch {}
+        if (e.error !== 'canceled' && e.error !== 'interrupted') {
+          item.onError?.(`Speech synthesis error: ${e.error}`);
+        }
+        handleDone();
+      };
+
+      // Watchdog timeout to resume if Chromium speech engine gets suspended
+      this.watchdogTimeout = window.setTimeout(() => {
+        if (
+          this._isSpeaking &&
+          this.isSupported() &&
+          window.speechSynthesis.speaking
+        ) {
+          try {
+            window.speechSynthesis.resume();
+          } catch {}
+        }
+      }, 10000);
+
+      window.speechSynthesis.speak(utterance);
+    } catch (err: unknown) {
+      this.clearWatchdog();
+      const msg = err instanceof Error ? err.message : String(err);
+      item.onError?.(`Failed to initiate speech: ${msg}`);
+      this.processNextInQueue();
+    }
+  }
+
+  /**
+   * Enqueue a single sentence into the pipelined speech stream.
+   */
+  public enqueueSentence(
     text: string,
     options?: SpeechSynthesisOptions,
     onEnd?: () => void,
@@ -135,81 +292,55 @@ export class BrowserSpeechSynthesizer implements ISpeechSynthesizer {
       return;
     }
 
-    this.stop();
-
-    try {
-      if (window.speechSynthesis.paused) {
-        window.speechSynthesis.resume();
-      }
-    } catch {}
-
     const clean = this.sanitizeForSpeech(text);
     if (!clean) {
       onEnd?.();
       return;
     }
 
-    try {
-      const utterance = new SpeechSynthesisUtterance(clean);
-      this.currentUtterance = utterance;
+    this.queue.push({
+      text: clean,
+      options,
+      onEnd,
+      onError,
+    });
 
-      const detectedLang = detectScriptLanguage(clean);
-      const targetLang =
-        options?.lang || (detectedLang !== 'en' ? detectedLang : 'en');
-      utterance.lang =
-        targetLang === 'ar'
-          ? 'ar-SA'
-          : targetLang === 'hi'
-            ? 'hi-IN'
-            : targetLang === 'en'
-              ? 'en-US'
-              : targetLang;
-
-      const voice = this.pickVoice(options?.voiceGender || 'male', targetLang);
-      if (voice) {
-        utterance.voice = voice;
-      }
-
-      utterance.rate = options?.rate ?? 1.05;
-      utterance.pitch = options?.pitch ?? 0.96;
-      utterance.volume = options?.volume ?? 1.0;
-
-      utterance.onstart = () => {
-        this._isSpeaking = true;
-      };
-
-      utterance.onend = () => {
-        this._isSpeaking = false;
-        this.currentUtterance = null;
-        onEnd?.();
-      };
-
-      utterance.onerror = (e) => {
-        this._isSpeaking = false;
-        this.currentUtterance = null;
-        try {
-          window.speechSynthesis.cancel();
-        } catch {}
-        if (e.error !== 'canceled' && e.error !== 'interrupted') {
-          onError?.(`Speech synthesis error: ${e.error}`);
-        }
-        onEnd?.();
-      };
-
-      window.speechSynthesis.speak(utterance);
-    } catch (err: unknown) {
-      this._isSpeaking = false;
-      this.currentUtterance = null;
-      try {
-        window.speechSynthesis.cancel();
-      } catch {}
-      const msg = err instanceof Error ? err.message : String(err);
-      onError?.(`Failed to initiate speech: ${msg}`);
-      onEnd?.();
+    if (!this.isQueueProcessing) {
+      this.processNextInQueue();
     }
   }
 
+  /**
+   * Signal that the streaming LLM response has concluded.
+   */
+  public finishQueue(onComplete?: () => void): void {
+    this.isQueueFinished = true;
+    this.queueCompleteCallback = onComplete || null;
+
+    if (!this.isQueueProcessing && this.queue.length === 0) {
+      this.queueCompleteCallback = null;
+      this.isQueueFinished = false;
+      onComplete?.();
+    }
+  }
+
+  public speak(
+    text: string,
+    options?: SpeechSynthesisOptions,
+    onEnd?: () => void,
+    onError?: (error: string) => void,
+  ): void {
+    this.stop();
+    this.enqueueSentence(text, options, undefined, onError);
+    this.finishQueue(onEnd);
+  }
+
   public stop(): void {
+    this.clearWatchdog();
+    this.queue = [];
+    this.isQueueProcessing = false;
+    this.isQueueFinished = false;
+    this.queueCompleteCallback = null;
     this._isSpeaking = false;
     this.currentUtterance = null;
     if (this.isSupported()) {

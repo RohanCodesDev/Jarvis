@@ -59,6 +59,10 @@ export class WhisperTranscriber {
         const formData = new FormData();
         formData.append('file', fileObj, fileName);
         formData.append('model', 'whisper-large-v3-turbo');
+        formData.append(
+          'prompt',
+          'JARVIS, Tony Stark, sir, Mark-85, HUD, voice directive, online, system diagnostics.',
+        );
 
         const groqRes = await fetch(
           'https://api.groq.com/openai/v1/audio/transcriptions',

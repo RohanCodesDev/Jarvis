@@ -39,6 +39,13 @@ export interface ISpeechSynthesizer {
     onEnd?: () => void,
     onError?: (error: string) => void,
   ): void;
+  enqueueSentence?(
+    text: string,
+    options?: SpeechSynthesisOptions,
+    onEnd?: () => void,
+    onError?: (error: string) => void,
+  ): void;
+  finishQueue?(onComplete?: () => void): void;
   stop(): void;
   isSpeaking(): boolean;
   getVoices(): SpeechSynthesisVoice[];
