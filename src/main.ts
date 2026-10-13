@@ -7,6 +7,14 @@ if (started) {
   app.quit();
 }
 
+// Catch and log uncaught exceptions so they don't trigger raw GUI error popups
+process.on('uncaughtException', (err) => {
+  console.error('[JARVIS Main Process Error]:', err);
+});
+process.on('unhandledRejection', (reason) => {
+  console.error('[JARVIS Main Process Rejection]:', reason);
+});
+
 let mainWindow: BrowserWindow | null = null;
 
 // Validate IPC sender to ensure requests only originate from our trusted main window
