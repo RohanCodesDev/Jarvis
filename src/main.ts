@@ -48,6 +48,9 @@ import {
   detectDirectIntent,
   parseModelDirectives,
 } from './services/tools/intentDetector';
+import { globalTaskPlanner } from './services/agent/taskPlanner';
+import { globalTaskExecutor } from './services/agent/taskExecutor';
+import type { ExecutionPlan } from './services/agent/agentTypes';
 
 function setupIpcHandlers() {
   ipcMain.handle('desktop:getSystemInfo', async (event) => {
@@ -286,31 +289,66 @@ function setupIpcHandlers() {
       console.warn('[Main] Failed to load memory context:', memErr);
     }
 
-    // Direct Fast-Path Intent Detection & Execution
-    const directAction = detectDirectIntent(data.message);
+    // Stage 6: Direct Multi-Step Plan Detection & Sequential Execution
+    const multiPlan = globalTaskPlanner.createPlanFromPrompt(data.message);
     let directActionResultMessage: string | undefined;
-    if (directAction) {
+
+    if (multiPlan && multiPlan.steps.length >= 2) {
       try {
-        const actionResult = await globalToolRegistry.executeTool(
-          directAction.toolId,
-          directAction.args,
+        const executed = await globalTaskExecutor.executePlan(
+          multiPlan,
+          (prog) => {
+            if (!event.sender.isDestroyed()) {
+              event.sender.send('desktop:taskProgress', prog);
+            }
+          },
         );
-        directActionResultMessage = `[SYSTEM TOOL RESULT: Tool "${directAction.toolId}" executed. Result: "${actionResult.message}"]`;
-        if (!event.sender.isDestroyed()) {
-          event.sender.send('desktop:activityEvent', {
-            id: 'act-' + Date.now(),
-            timestamp: new Date().toLocaleTimeString('en-US', {
-              hour12: false,
-            }),
-            level: actionResult.success ? 'success' : 'warn',
-            category: 'tool',
-            message: actionResult.message,
-            durationMs: actionResult.durationMs,
-            imageUrl: (actionResult.data as any)?.dataUrl,
-          });
+        databaseService.saveTaskPlan(executed).catch(() => {});
+        directActionResultMessage = `[SYSTEM AGENT MISSION SUMMARY:\n${executed.summary}]`;
+
+        for (const step of executed.steps) {
+          if (!event.sender.isDestroyed()) {
+            event.sender.send('desktop:activityEvent', {
+              id: 'act-' + Date.now(),
+              timestamp: new Date().toLocaleTimeString('en-US', {
+                hour12: false,
+              }),
+              level: step.status === 'completed' ? 'success' : 'warn',
+              category: 'tool',
+              message: `${step.description}: ${step.result?.message || step.error || 'Done'}`,
+              durationMs: step.durationMs,
+            });
+          }
         }
-      } catch (toolErr) {
-        console.warn('[Main] Direct action execution error:', toolErr);
+      } catch (planErr) {
+        console.warn('[Main] Multi-step plan execution error:', planErr);
+      }
+    } else {
+      // Direct Single-Action Intent Detection & Execution
+      const directAction = detectDirectIntent(data.message);
+      if (directAction) {
+        try {
+          const actionResult = await globalToolRegistry.executeTool(
+            directAction.toolId,
+            directAction.args,
+          );
+          directActionResultMessage = `[SYSTEM TOOL RESULT: Tool "${directAction.toolId}" executed. Result: "${actionResult.message}"]`;
+          if (!event.sender.isDestroyed()) {
+            event.sender.send('desktop:activityEvent', {
+              id: 'act-' + Date.now(),
+              timestamp: new Date().toLocaleTimeString('en-US', {
+                hour12: false,
+              }),
+              level: actionResult.success ? 'success' : 'warn',
+              category: 'tool',
+              message: actionResult.message,
+              durationMs: actionResult.durationMs,
+              imageUrl: (actionResult.data as any)?.dataUrl,
+            });
+          }
+        } catch (toolErr) {
+          console.warn('[Main] Direct action execution error:', toolErr);
+        }
       }
     }
 
@@ -350,31 +388,55 @@ function setupIpcHandlers() {
       async (fullResponse, metadata) => {
         let finalResponseText = fullResponse;
 
-        // Stage 5: Parse Model Directives [ACTION: toolId {...}]
-        const parsed = parseModelDirectives(fullResponse);
-        if (parsed.actions.length > 0) {
-          finalResponseText = parsed.cleanedText;
-          for (const action of parsed.actions) {
-            try {
-              const res = await globalToolRegistry.executeTool(
-                action.toolId,
-                action.args,
-              );
-              if (!event.sender.isDestroyed()) {
-                event.sender.send('desktop:activityEvent', {
-                  id: 'act-' + Date.now(),
-                  timestamp: new Date().toLocaleTimeString('en-US', {
-                    hour12: false,
-                  }),
-                  level: res.success ? 'success' : 'warn',
-                  category: 'tool',
-                  message: res.message,
-                  durationMs: res.durationMs,
-                  imageUrl: (res.data as any)?.dataUrl,
-                });
+        // Stage 6: Parse Model Multi-Step Plan Directives [PLAN: [...]]
+        const modelPlan = globalTaskPlanner.parseModelPlanDirective(
+          fullResponse,
+          data.message,
+        );
+        if (modelPlan && modelPlan.steps.length >= 2) {
+          try {
+            finalResponseText = fullResponse
+              .replace(/\[PLAN:\s*[\s\S]+?\]/i, '')
+              .trim();
+            const executed = await globalTaskExecutor.executePlan(
+              modelPlan,
+              (prog) => {
+                if (!event.sender.isDestroyed()) {
+                  event.sender.send('desktop:taskProgress', prog);
+                }
+              },
+            );
+            databaseService.saveTaskPlan(executed).catch(() => {});
+          } catch (planErr) {
+            console.warn('[Main] Model plan execution error:', planErr);
+          }
+        } else {
+          // Stage 5: Parse Model Directives [ACTION: toolId {...}]
+          const parsed = parseModelDirectives(fullResponse);
+          if (parsed.actions.length > 0) {
+            finalResponseText = parsed.cleanedText;
+            for (const action of parsed.actions) {
+              try {
+                const res = await globalToolRegistry.executeTool(
+                  action.toolId,
+                  action.args,
+                );
+                if (!event.sender.isDestroyed()) {
+                  event.sender.send('desktop:activityEvent', {
+                    id: 'act-' + Date.now(),
+                    timestamp: new Date().toLocaleTimeString('en-US', {
+                      hour12: false,
+                    }),
+                    level: res.success ? 'success' : 'warn',
+                    category: 'tool',
+                    message: res.message,
+                    durationMs: res.durationMs,
+                    imageUrl: (res.data as any)?.dataUrl,
+                  });
+                }
+              } catch (actErr) {
+                console.warn('[Main] Directive execution error:', actErr);
               }
-            } catch (actErr) {
-              console.warn('[Main] Directive execution error:', actErr);
             }
           }
         }
@@ -531,6 +593,59 @@ function setupIpcHandlers() {
   ipcMain.handle('desktop:getToolAuditLogs', async (event) => {
     if (!isValidSender(event)) throw new Error('Unauthorized IPC sender');
     return globalToolRegistry.getAuditLogs();
+  });
+
+  // Stage 6: Agentic Task Execution & Multi-Step Missions
+  ipcMain.handle('desktop:createTaskPlan', async (event, prompt: unknown) => {
+    if (!isValidSender(event)) throw new Error('Unauthorized IPC sender');
+    if (typeof prompt !== 'string') return null;
+    return globalTaskPlanner.createPlanFromPrompt(prompt);
+  });
+
+  ipcMain.handle(
+    'desktop:executeTaskPlan',
+    async (event, planPayload: unknown) => {
+      if (!isValidSender(event)) throw new Error('Unauthorized IPC sender');
+      if (typeof planPayload !== 'object' || planPayload === null) {
+        throw new Error('Invalid plan payload');
+      }
+      const plan = planPayload as ExecutionPlan;
+      const executed = await globalTaskExecutor.executePlan(plan, (prog) => {
+        if (!event.sender.isDestroyed()) {
+          event.sender.send('desktop:taskProgress', prog);
+        }
+      });
+      databaseService.saveTaskPlan(executed).catch(() => {});
+      return executed;
+    },
+  );
+
+  ipcMain.handle(
+    'desktop:approveTaskStep',
+    async (event, planId: unknown, stepId: unknown, approved: unknown) => {
+      if (!isValidSender(event)) throw new Error('Unauthorized IPC sender');
+      if (typeof planId !== 'string' || typeof stepId !== 'string') {
+        return { success: false };
+      }
+      const ok = globalTaskExecutor.approveStep(
+        planId,
+        stepId,
+        Boolean(approved),
+      );
+      return { success: ok };
+    },
+  );
+
+  ipcMain.handle('desktop:cancelTaskPlan', async (event, planId: unknown) => {
+    if (!isValidSender(event)) throw new Error('Unauthorized IPC sender');
+    if (typeof planId !== 'string') return { success: false };
+    const ok = globalTaskExecutor.cancelPlan(planId);
+    return { success: ok };
+  });
+
+  ipcMain.handle('desktop:getTaskPlans', async (event) => {
+    if (!isValidSender(event)) throw new Error('Unauthorized IPC sender');
+    return databaseService.getTaskPlans();
   });
 }
 

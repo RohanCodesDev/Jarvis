@@ -1,6 +1,7 @@
 import { Pool } from 'pg';
 import { getDbUri } from '../secretStore';
 import type { ChatMessage, UserMemoryItem } from '../../types/hud';
+import type { ExecutionPlan } from '../agent/agentTypes';
 
 export class DatabaseService {
   private pool: Pool | null = null;
@@ -8,6 +9,7 @@ export class DatabaseService {
   private lastError: string | null = null;
   private memoryCache: Map<string, UserMemoryItem> = new Map();
   private messageCache: ChatMessage[] = [];
+  private taskPlansCache: Map<string, ExecutionPlan> = new Map();
   private isInitialized = false;
 
   constructor(customPool?: Pool) {
@@ -88,6 +90,20 @@ export class DatabaseService {
             status VARCHAR(16) DEFAULT 'delivered',
             metadata JSONB,
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+          );
+        `);
+
+        await client.query(`
+          CREATE TABLE IF NOT EXISTS task_executions (
+            id VARCHAR(64) PRIMARY KEY,
+            title TEXT NOT NULL,
+            prompt TEXT NOT NULL,
+            status VARCHAR(32) NOT NULL,
+            steps JSONB NOT NULL,
+            summary TEXT,
+            duration_ms INT,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            completed_at TIMESTAMPTZ
           );
         `);
 
@@ -414,6 +430,95 @@ export class DatabaseService {
       .slice(0, 8)
       .map((m) => `- [${m.category.toUpperCase()}]: ${m.content}`);
     return `[PERSISTENT USER MEMORY BANKS]\n${lines.join('\n')}\n(Use these persistent facts to personalize your responses and address the user with full context.)`;
+  }
+
+  public async saveTaskPlan(
+    plan: ExecutionPlan,
+  ): Promise<{ success: boolean }> {
+    this.taskPlansCache.set(plan.id, plan);
+
+    if (!this.isConnected) {
+      await this.initialize().catch(() => {});
+    }
+
+    if (this.isConnected && this.pool) {
+      try {
+        await this.pool.query(
+          `INSERT INTO task_executions (id, title, prompt, status, steps, summary, duration_ms, created_at, completed_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+           ON CONFLICT (id) DO UPDATE
+             SET status = EXCLUDED.status,
+                 steps = EXCLUDED.steps,
+                 summary = EXCLUDED.summary,
+                 duration_ms = EXCLUDED.duration_ms,
+                 completed_at = EXCLUDED.completed_at;`,
+          [
+            plan.id,
+            plan.title,
+            plan.prompt,
+            plan.status,
+            JSON.stringify(plan.steps),
+            plan.summary || null,
+            plan.totalDurationMs || null,
+            plan.createdAt,
+            plan.completedAt || null,
+          ],
+        );
+      } catch (err) {
+        console.warn(
+          '[DatabaseService] Failed to persist task execution plan to Neon DB:',
+          err,
+        );
+      }
+    }
+
+    return { success: true };
+  }
+
+  public async getTaskPlans(limit = 20): Promise<ExecutionPlan[]> {
+    if (!this.isConnected) {
+      await this.initialize().catch(() => {});
+    }
+
+    if (this.isConnected && this.pool) {
+      try {
+        const res = await this.pool.query(
+          `SELECT id, title, prompt, status, steps, summary, duration_ms, created_at, completed_at
+           FROM task_executions
+           ORDER BY created_at DESC
+           LIMIT $1;`,
+          [limit],
+        );
+
+        if (res.rows.length > 0) {
+          const loaded: ExecutionPlan[] = res.rows.map((r) => ({
+            id: r.id,
+            title: r.title,
+            prompt: r.prompt,
+            status: r.status,
+            steps: typeof r.steps === 'string' ? JSON.parse(r.steps) : r.steps,
+            summary: r.summary,
+            totalDurationMs: r.duration_ms,
+            createdAt: new Date(r.created_at).toISOString(),
+            completedAt: r.completed_at
+              ? new Date(r.completed_at).toISOString()
+              : undefined,
+            currentStepIndex: 0,
+          }));
+          for (const p of loaded) {
+            this.taskPlansCache.set(p.id, p);
+          }
+          return loaded;
+        }
+      } catch (err) {
+        console.warn(
+          '[DatabaseService] Failed to query task plans from Neon DB:',
+          err,
+        );
+      }
+    }
+
+    return Array.from(this.taskPlansCache.values()).slice(-limit);
   }
 }
 

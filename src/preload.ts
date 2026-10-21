@@ -125,6 +125,36 @@ const desktopAPI: DesktopBridgeAPI = {
   getToolAuditLogs: async () => {
     return ipcRenderer.invoke('desktop:getToolAuditLogs');
   },
+  createTaskPlan: async (prompt) => {
+    return ipcRenderer.invoke('desktop:createTaskPlan', prompt);
+  },
+  executeTaskPlan: async (plan) => {
+    return ipcRenderer.invoke('desktop:executeTaskPlan', plan);
+  },
+  approveTaskStep: async (planId, stepId, approved) => {
+    return ipcRenderer.invoke(
+      'desktop:approveTaskStep',
+      planId,
+      stepId,
+      approved,
+    );
+  },
+  cancelTaskPlan: async (planId) => {
+    return ipcRenderer.invoke('desktop:cancelTaskPlan', planId);
+  },
+  getTaskPlans: async () => {
+    return ipcRenderer.invoke('desktop:getTaskPlans');
+  },
+  onTaskProgress: (callback) => {
+    const handler = (
+      _event: Electron.IpcRendererEvent,
+      data: import('./services/agent/agentTypes').PlanProgressEvent,
+    ) => callback(data);
+    ipcRenderer.on('desktop:taskProgress', handler);
+    return () => {
+      ipcRenderer.removeListener('desktop:taskProgress', handler);
+    };
+  },
 };
 
 contextBridge.exposeInMainWorld('jarvisDesktop', desktopAPI);

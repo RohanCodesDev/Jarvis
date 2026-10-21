@@ -23,6 +23,8 @@ import {
   TacticalActionCard,
   type TacticalCardData,
 } from './hud/TacticalActionCard';
+import { TacticalTaskPlanCard } from './hud/TacticalTaskPlanCard';
+import type { ExecutionPlan } from '../services/agent/agentTypes';
 import { soundFX } from './audio/soundFX';
 import {
   VoiceCoordinator,
@@ -38,6 +40,7 @@ export const JarvisHUD: React.FC = () => {
   const [tacticalCard, setTacticalCard] = useState<TacticalCardData | null>(
     null,
   );
+  const [activePlan, setActivePlan] = useState<ExecutionPlan | null>(null);
 
   const [settings, setSettings] = useState<JarvisSettings>({
     cloudProvider: 'openrouter',
@@ -256,7 +259,39 @@ export const JarvisHUD: React.FC = () => {
         unsub();
       };
     }
-  }, [addActivity]);
+
+    if (window.jarvisDesktop?.onTaskProgress) {
+      const unsubPlan = window.jarvisDesktop.onTaskProgress((event) => {
+        setActivePlan((prev) => {
+          const updated: ExecutionPlan = {
+            id: event.planId,
+            title:
+              prev?.title ||
+              `Tactical Multi-Step Mission (${event.totalSteps} Steps)`,
+            prompt: prev?.prompt || '',
+            steps: event.steps,
+            status: event.status,
+            currentStepIndex: event.currentStepIndex,
+            summary: event.summary || prev?.summary,
+            createdAt: prev?.createdAt || new Date().toISOString(),
+          };
+          return updated;
+        });
+
+        if (event.status === 'completed' && settings.soundEffects) {
+          soundFX.playActionSuccess();
+        } else if (
+          event.status === 'awaiting_approval' &&
+          settings.soundEffects
+        ) {
+          soundFX.playAlertTone();
+        }
+      });
+      return () => {
+        unsubPlan();
+      };
+    }
+  }, [addActivity, settings.soundEffects]);
 
   // Subtle telemetry pulse
   useEffect(() => {
@@ -751,6 +786,28 @@ export const JarvisHUD: React.FC = () => {
     addActivity('info', 'system', `Updated memory ID ${id}`);
   };
 
+  const handleApproveTaskStep = useCallback(
+    (planId: string, stepId: string) => {
+      if (window.jarvisDesktop?.approveTaskStep) {
+        window.jarvisDesktop
+          .approveTaskStep(planId, stepId, true)
+          .catch(() => {});
+        addActivity('success', 'security', `Step approved by user.`);
+      }
+    },
+    [addActivity],
+  );
+
+  const handleCancelTaskPlan = useCallback(
+    (planId: string) => {
+      if (window.jarvisDesktop?.cancelTaskPlan) {
+        window.jarvisDesktop.cancelTaskPlan(planId).catch(() => {});
+        addActivity('warn', 'ai', `Mission execution cancelled by user.`);
+      }
+    },
+    [addActivity],
+  );
+
   const latestMessage = messages[messages.length - 1];
   const currentTheme: HudTheme = settings.theme || 'cyan';
 
@@ -879,6 +936,25 @@ export const JarvisHUD: React.FC = () => {
         card={tacticalCard}
         onDismiss={() => setTacticalCard(null)}
       />
+
+      {/* 7. Holographic Tactical Multi-Step Mission Card */}
+      {activePlan && (
+        <div
+          style={{
+            position: 'absolute',
+            top: '72px',
+            right: '24px',
+            zIndex: 45,
+          }}
+        >
+          <TacticalTaskPlanCard
+            plan={activePlan}
+            onApproveStep={handleApproveTaskStep}
+            onCancelPlan={handleCancelTaskPlan}
+            onDismiss={() => setActivePlan(null)}
+          />
+        </div>
+      )}
     </div>
   );
 };

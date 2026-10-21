@@ -150,6 +150,27 @@ export interface DesktopBridgeAPI {
   getToolAuditLogs?: () => Promise<
     import('../services/tools/toolTypes').ToolAuditLog[]
   >;
+  // Stage 6: Agentic Task Execution & Multi-Step Missions
+  createTaskPlan?: (
+    prompt: string,
+  ) => Promise<import('../services/agent/agentTypes').ExecutionPlan | null>;
+  executeTaskPlan?: (
+    plan: import('../services/agent/agentTypes').ExecutionPlan,
+  ) => Promise<import('../services/agent/agentTypes').ExecutionPlan>;
+  approveTaskStep?: (
+    planId: string,
+    stepId: string,
+    approved: boolean,
+  ) => Promise<{ success: boolean }>;
+  cancelTaskPlan?: (planId: string) => Promise<{ success: boolean }>;
+  getTaskPlans?: () => Promise<
+    import('../services/agent/agentTypes').ExecutionPlan[]
+  >;
+  onTaskProgress?: (
+    callback: (
+      event: import('../services/agent/agentTypes').PlanProgressEvent,
+    ) => void,
+  ) => () => void;
 }
 
 declare global {

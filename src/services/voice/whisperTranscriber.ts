@@ -101,8 +101,17 @@ export class WhisperTranscriber {
             error: `Groq Whisper failed (${groqRes.status}): ${errDetail}`,
           };
         }
-      } catch (groqErr) {
+      } catch (groqErr: any) {
         console.warn('[Whisper] Groq STT error:', groqErr);
+        const errMsg = groqErr?.message || String(groqErr);
+        if (errMsg.includes('ENOTFOUND') || errMsg.includes('fetch failed')) {
+          return {
+            text: '',
+            source: 'whisper',
+            error:
+              'Voice transcription offline: Unable to reach speech service (network / DNS offline). Please check your internet connection or type your command.',
+          };
+        }
       }
     }
 
