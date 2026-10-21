@@ -2,6 +2,7 @@ import { Pool } from 'pg';
 import { getDbUri } from '../secretStore';
 import type { ChatMessage, UserMemoryItem } from '../../types/hud';
 import type { ExecutionPlan } from '../agent/agentTypes';
+import type { ReminderItem } from '../scheduler/reminderTypes';
 
 export class DatabaseService {
   private pool: Pool | null = null;
@@ -10,6 +11,7 @@ export class DatabaseService {
   private memoryCache: Map<string, UserMemoryItem> = new Map();
   private messageCache: ChatMessage[] = [];
   private taskPlansCache: Map<string, ExecutionPlan> = new Map();
+  private remindersCache: Map<string, ReminderItem> = new Map();
   private isInitialized = false;
 
   constructor(customPool?: Pool) {
@@ -104,6 +106,17 @@ export class DatabaseService {
             duration_ms INT,
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             completed_at TIMESTAMPTZ
+          );
+        `);
+
+        await client.query(`
+          CREATE TABLE IF NOT EXISTS reminders (
+            id VARCHAR(64) PRIMARY KEY,
+            text TEXT NOT NULL,
+            due_timestamp BIGINT NOT NULL,
+            due_date_str VARCHAR(32) NOT NULL,
+            status VARCHAR(16) NOT NULL DEFAULT 'pending',
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
           );
         `);
 
@@ -519,6 +532,82 @@ export class DatabaseService {
     }
 
     return Array.from(this.taskPlansCache.values()).slice(-limit);
+  }
+
+  public async saveReminder(
+    reminder: ReminderItem,
+  ): Promise<{ success: boolean }> {
+    this.remindersCache.set(reminder.id, reminder);
+
+    if (!this.isConnected) {
+      await this.initialize().catch(() => {});
+    }
+
+    if (this.isConnected && this.pool) {
+      try {
+        await this.pool.query(
+          `INSERT INTO reminders (id, text, due_timestamp, due_date_str, status, created_at)
+           VALUES ($1, $2, $3, $4, $5, $6)
+           ON CONFLICT (id) DO UPDATE
+             SET status = EXCLUDED.status;`,
+          [
+            reminder.id,
+            reminder.text,
+            reminder.dueTimestamp,
+            reminder.dueDateStr,
+            reminder.status,
+            reminder.createdAt,
+          ],
+        );
+      } catch (err) {
+        console.warn(
+          '[DatabaseService] Failed to persist reminder to Neon DB:',
+          err,
+        );
+      }
+    }
+
+    return { success: true };
+  }
+
+  public async getReminders(limit = 50): Promise<ReminderItem[]> {
+    if (!this.isConnected) {
+      await this.initialize().catch(() => {});
+    }
+
+    if (this.isConnected && this.pool) {
+      try {
+        const res = await this.pool.query(
+          `SELECT id, text, due_timestamp, due_date_str, status, created_at
+           FROM reminders
+           ORDER BY due_timestamp ASC
+           LIMIT $1;`,
+          [limit],
+        );
+
+        if (res.rows.length > 0) {
+          const loaded: ReminderItem[] = res.rows.map((r) => ({
+            id: r.id,
+            text: r.text,
+            dueTimestamp: Number(r.due_timestamp),
+            dueDateStr: r.due_date_str,
+            status: r.status,
+            createdAt: new Date(r.created_at).toISOString(),
+          }));
+          for (const item of loaded) {
+            this.remindersCache.set(item.id, item);
+          }
+          return loaded;
+        }
+      } catch (err) {
+        console.warn(
+          '[DatabaseService] Failed to query reminders from Neon DB:',
+          err,
+        );
+      }
+    }
+
+    return Array.from(this.remindersCache.values()).slice(0, limit);
   }
 }
 

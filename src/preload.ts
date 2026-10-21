@@ -155,6 +155,28 @@ const desktopAPI: DesktopBridgeAPI = {
       ipcRenderer.removeListener('desktop:taskProgress', handler);
     };
   },
+  createReminder: async (text, minutes) => {
+    return ipcRenderer.invoke('desktop:createReminder', text, minutes);
+  },
+  getReminders: async () => {
+    return ipcRenderer.invoke('desktop:getReminders');
+  },
+  dismissReminder: async (id) => {
+    return ipcRenderer.invoke('desktop:dismissReminder', id);
+  },
+  onReminderTriggered: (callback) => {
+    const handler = (
+      _event: Electron.IpcRendererEvent,
+      data: import('./services/scheduler/reminderTypes').ReminderItem,
+    ) => callback(data);
+    ipcRenderer.on('desktop:reminderTriggered', handler);
+    return () => {
+      ipcRenderer.removeListener('desktop:reminderTriggered', handler);
+    };
+  },
+  validateOllama: async () => {
+    return ipcRenderer.invoke('desktop:validateOllama');
+  },
 };
 
 contextBridge.exposeInMainWorld('jarvisDesktop', desktopAPI);

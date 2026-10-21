@@ -171,6 +171,21 @@ export interface DesktopBridgeAPI {
       event: import('../services/agent/agentTypes').PlanProgressEvent,
     ) => void,
   ) => () => void;
+  // Stage 7: Reminders, Scheduling & Ollama
+  createReminder?: (
+    text: string,
+    minutes?: number,
+  ) => Promise<import('../services/scheduler/reminderTypes').ReminderItem>;
+  getReminders?: () => Promise<
+    import('../services/scheduler/reminderTypes').ReminderItem[]
+  >;
+  dismissReminder?: (id: string) => Promise<{ success: boolean }>;
+  onReminderTriggered?: (
+    callback: (
+      reminder: import('../services/scheduler/reminderTypes').ReminderItem,
+    ) => void,
+  ) => () => void;
+  validateOllama?: () => Promise<{ valid: boolean; error?: string }>;
 }
 
 declare global {

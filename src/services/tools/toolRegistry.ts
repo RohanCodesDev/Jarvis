@@ -260,6 +260,33 @@ export class ToolRegistry {
         return await readQuickNotes();
       },
     });
+
+    // 16. Schedule Timed Reminder
+    this.registerTool({
+      id: 'schedule_reminder',
+      name: 'Schedule Timed Reminder',
+      description:
+        'Schedules a timed desktop reminder with Windows notification and alarm.',
+      permission: 'low_risk',
+      schema: z.object({
+        text: z.string().min(1, 'Reminder text is required'),
+        minutes: z.number().min(1).default(5),
+      }),
+      execute: async (args: { text: string; minutes?: number }) => {
+        const mins = args.minutes ?? 5;
+        const { globalReminderService } =
+          await import('../scheduler/reminderService');
+        const item = await globalReminderService.createReminder({
+          text: args.text,
+          dueInMinutes: mins,
+        });
+        return {
+          success: true,
+          message: `Reminder scheduled: "${item.text}" due at ${item.dueDateStr} (in ${mins} min), sir.`,
+          data: item,
+        };
+      },
+    });
   }
 
   public registerTool<T>(tool: ToolDefinition<T>): void {

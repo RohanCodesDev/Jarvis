@@ -47,6 +47,35 @@ export function detectDirectIntent(input: string): DetectedAction | null {
     };
   }
 
+  // 0.1 Timed Reminders
+  // e.g. "remind me in 10 minutes to submit the quarterly report"
+  const reminderInMatch = clean.match(
+    /(?:remind\s+me|set\s+(?:a\s+)?reminder)\s+in\s+(\d+)\s*(?:minutes|minute|mins|min|m)\s*(?:to|that|for)?\s*(.+)/i,
+  );
+  if (reminderInMatch) {
+    const mins = Math.max(1, parseInt(reminderInMatch[1], 10));
+    const text = reminderInMatch[2].trim();
+    return {
+      toolId: 'schedule_reminder',
+      args: { text, minutes: mins },
+      confidence: 'high',
+    };
+  }
+
+  // e.g. "remind me to drink water in 15 minutes"
+  const reminderPostMatch = clean.match(
+    /remind\s+me\s+(?:to|that|for)\s+(.+?)\s+in\s+(\d+)\s*(?:minutes|minute|mins|min|m)/i,
+  );
+  if (reminderPostMatch) {
+    const text = reminderPostMatch[1].trim();
+    const mins = Math.max(1, parseInt(reminderPostMatch[2], 10));
+    return {
+      toolId: 'schedule_reminder',
+      args: { text, minutes: mins },
+      confidence: 'high',
+    };
+  }
+
   const lower = clean.toLowerCase();
 
   // 1. Screen Capture

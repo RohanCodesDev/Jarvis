@@ -1,4 +1,14 @@
-import { app, BrowserWindow, ipcMain, type IpcMainInvokeEvent } from 'electron';
+import {
+  app,
+  BrowserWindow,
+  ipcMain,
+  globalShortcut,
+  Tray,
+  Menu,
+  Notification,
+  nativeImage,
+  type IpcMainInvokeEvent,
+} from 'electron';
 import path from 'node:path';
 import started from 'electron-squirrel-startup';
 
@@ -16,6 +26,8 @@ process.on('unhandledRejection', (reason) => {
 });
 
 let mainWindow: BrowserWindow | null = null;
+let tray: Tray | null = null;
+let isQuitting = false;
 
 // Validate IPC sender to ensure requests only originate from our trusted main window
 function isValidSender(event: IpcMainInvokeEvent): boolean {
@@ -51,6 +63,7 @@ import {
 import { globalTaskPlanner } from './services/agent/taskPlanner';
 import { globalTaskExecutor } from './services/agent/taskExecutor';
 import type { ExecutionPlan } from './services/agent/agentTypes';
+import { globalReminderService } from './services/scheduler/reminderService';
 
 function setupIpcHandlers() {
   ipcMain.handle('desktop:getSystemInfo', async (event) => {
@@ -648,6 +661,36 @@ function setupIpcHandlers() {
     if (!isValidSender(event)) throw new Error('Unauthorized IPC sender');
     return databaseService.getTaskPlans();
   });
+
+  // Stage 7: Scheduling, Reminders & Local Ollama
+  ipcMain.handle(
+    'desktop:createReminder',
+    async (event, text: unknown, minutes: unknown) => {
+      if (!isValidSender(event)) throw new Error('Unauthorized IPC sender');
+      if (typeof text !== 'string') throw new Error('Invalid reminder text');
+      const mins = typeof minutes === 'number' ? minutes : 5;
+      return globalReminderService.createReminder({
+        text,
+        dueInMinutes: mins,
+      });
+    },
+  );
+
+  ipcMain.handle('desktop:getReminders', async (event) => {
+    if (!isValidSender(event)) throw new Error('Unauthorized IPC sender');
+    return globalReminderService.getAllReminders();
+  });
+
+  ipcMain.handle('desktop:dismissReminder', async (event, id: unknown) => {
+    if (!isValidSender(event)) throw new Error('Unauthorized IPC sender');
+    if (typeof id !== 'string') return { success: false };
+    return { success: globalReminderService.dismissReminder(id) };
+  });
+
+  ipcMain.handle('desktop:validateOllama', async (event) => {
+    if (!isValidSender(event)) throw new Error('Unauthorized IPC sender');
+    return aiManager.validateOllama();
+  });
 }
 
 const createWindow = () => {
@@ -698,6 +741,14 @@ const createWindow = () => {
   mainWindow.show();
   mainWindow.focus();
 
+  // Minimize to tray on close
+  mainWindow.on('close', (e) => {
+    if (!isQuitting) {
+      e.preventDefault();
+      mainWindow?.hide();
+    }
+  });
+
   if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
     mainWindow.loadURL(MAIN_WINDOW_VITE_DEV_SERVER_URL);
   } else {
@@ -714,11 +765,120 @@ app.whenReady().then(() => {
   });
   createWindow();
 
+  // Stage 7: Global Hotkey (Ctrl+Alt+J)
+  try {
+    globalShortcut.register('CommandOrControl+Alt+J', () => {
+      if (!mainWindow) return;
+      if (mainWindow.isVisible() && mainWindow.isFocused()) {
+        mainWindow.hide();
+      } else {
+        mainWindow.show();
+        mainWindow.focus();
+      }
+    });
+  } catch (shErr) {
+    console.warn('[Main] Global shortcut registration failed:', shErr);
+  }
+
+  // Stage 7: System Tray Integration
+  try {
+    const iconBase64 =
+      'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAZElEQVQ4T2NkoBAwUqifYdQAUjT8P3/y/8+fP9GNYmBghOsiRn4GBgZWkhw5asDfv38ZGP8xMDAw/kdz2v//DL9//vxpJMYAcgaQYAC9XE60VnIGkGAAvVxOtFZygTGy7cRoJgEAkY8+A7+yV9YAAAAASUVORK5CYII=';
+    const trayIcon = nativeImage.createFromDataURL(
+      `data:image/png;base64,${iconBase64}`,
+    );
+    tray = new Tray(trayIcon);
+    tray.setToolTip('J.A.R.V.I.S. Desktop Assistant (Ctrl+Alt+J)');
+
+    const trayMenu = Menu.buildFromTemplate([
+      {
+        label: 'Open JARVIS HUD',
+        click: () => {
+          mainWindow?.show();
+          mainWindow?.focus();
+        },
+      },
+      {
+        label: 'System Diagnostics',
+        click: async () => {
+          mainWindow?.show();
+          mainWindow?.focus();
+          const res = await globalToolRegistry.executeTool(
+            'system_diagnostics',
+            {},
+          );
+          if (mainWindow) {
+            mainWindow.webContents.send('desktop:activityEvent', {
+              id: 'act-' + Date.now(),
+              timestamp: new Date().toLocaleTimeString('en-US', {
+                hour12: false,
+              }),
+              level: 'info',
+              category: 'system',
+              message: res.message,
+            });
+          }
+        },
+      },
+      { type: 'separator' },
+      {
+        label: 'Quit JARVIS',
+        click: () => {
+          isQuitting = true;
+          app.quit();
+        },
+      },
+    ]);
+
+    tray.setContextMenu(trayMenu);
+    tray.on('click', () => {
+      if (!mainWindow) return;
+      if (mainWindow.isVisible()) {
+        mainWindow.hide();
+      } else {
+        mainWindow.show();
+        mainWindow.focus();
+      }
+    });
+  } catch (trayErr) {
+    console.warn('[Main] System Tray setup error:', trayErr);
+  }
+
+  // Stage 7: Native Windows Notifications & Reminders
+  globalReminderService.onReminderTrigger((reminder) => {
+    try {
+      if (Notification.isSupported()) {
+        new Notification({
+          title: 'J.A.R.V.I.S. Protocol Reminder',
+          body: reminder.text,
+        }).show();
+      }
+    } catch {}
+
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('desktop:reminderTriggered', reminder);
+      mainWindow.webContents.send('desktop:activityEvent', {
+        id: 'act-' + Date.now(),
+        timestamp: new Date().toLocaleTimeString('en-US', { hour12: false }),
+        level: 'warn',
+        category: 'system',
+        message: `Reminder Due: "${reminder.text}"`,
+      });
+    }
+  });
+
+  // Sync saved reminders from Neon PostgreSQL
+  globalReminderService.syncFromDatabase().catch(() => {});
+
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       createWindow();
     }
   });
+});
+
+app.on('will-quit', () => {
+  globalShortcut.unregisterAll();
 });
 
 app.on('window-all-closed', () => {

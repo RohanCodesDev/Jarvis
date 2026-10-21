@@ -291,7 +291,51 @@ export const JarvisHUD: React.FC = () => {
         unsubPlan();
       };
     }
-  }, [addActivity, settings.soundEffects]);
+
+    if (window.jarvisDesktop?.onReminderTriggered) {
+      const unsubReminder = window.jarvisDesktop.onReminderTriggered(
+        (reminder) => {
+          if (settings.soundEffects) {
+            soundFX.playAlertTone();
+          }
+          setTacticalCard({
+            id: reminder.id,
+            title: 'Directive Reminder Due',
+            message: reminder.text,
+            category: 'system',
+            level: 'warn',
+          });
+          if (settings.speechEnabled && telemetry.speakerEnabled) {
+            voiceCoordinatorRef.current.speak(
+              `Reminder, sir: ${reminder.text}`,
+              {
+                onStateChange: (st) => {
+                  if (st === 'speaking') setAssistantState('speaking');
+                  else if (st === 'idle') setAssistantState('idle');
+                },
+                onError: (err) => addActivity('warn', 'voice', err),
+              },
+              {
+                voiceGender: settings.voiceGender,
+                rate: 1.05,
+                pitch: 0.96,
+              },
+              () => setAssistantState('idle'),
+            );
+          }
+        },
+      );
+      return () => {
+        unsubReminder();
+      };
+    }
+  }, [
+    addActivity,
+    settings.soundEffects,
+    settings.speechEnabled,
+    settings.voiceGender,
+    telemetry.speakerEnabled,
+  ]);
 
   // Subtle telemetry pulse
   useEffect(() => {

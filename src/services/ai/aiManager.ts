@@ -5,6 +5,7 @@ import {
 } from './types';
 import { OpenRouterProvider } from './openrouterProvider';
 import { GroqProvider } from './groqProvider';
+import { OllamaProvider } from './ollamaProvider';
 import { MockAIProvider } from './mockProvider';
 import { getApiKey, hasApiKey, getGroqKey, hasGroqKey } from '../secretStore';
 import { loadSettings } from '../settingsStore';
@@ -12,22 +13,27 @@ import { loadSettings } from '../settingsStore';
 export class AIManager {
   private openRouterProvider: OpenRouterProvider;
   private groqProvider: GroqProvider;
+  private ollamaProvider: OllamaProvider;
   private mockProvider: MockAIProvider;
   private activeStreams: Map<string, AbortController> = new Map();
 
   constructor() {
     this.openRouterProvider = new OpenRouterProvider(() => getApiKey());
     this.groqProvider = new GroqProvider(() => getGroqKey());
+    this.ollamaProvider = new OllamaProvider();
     this.mockProvider = new MockAIProvider();
   }
 
   /**
-   * Determine the current provider: OpenRouter, Groq, or Mock fallback.
+   * Determine the current provider: OpenRouter, Groq, Ollama, or Mock fallback.
    */
   public getActiveProvider(preferMock = false): AIProvider {
     if (preferMock) return this.mockProvider;
 
     const settings = loadSettings();
+    if (settings.cloudProvider === 'ollama') {
+      return this.ollamaProvider;
+    }
     if (settings.cloudProvider === 'groq' && hasGroqKey()) {
       return this.groqProvider;
     }
@@ -58,6 +64,10 @@ export class AIManager {
     return this.groqProvider.validateKey(key);
   }
 
+  public async validateOllama(): Promise<{ valid: boolean; error?: string }> {
+    return this.ollamaProvider.validateKey();
+  }
+
   /**
    * List available models.
    */
@@ -66,6 +76,9 @@ export class AIManager {
   ): Promise<AIModelInfo[]> {
     const settings = loadSettings();
     const provider = providerOverride || settings.cloudProvider;
+    if (provider === 'ollama') {
+      return this.ollamaProvider.getModels();
+    }
     if (provider === 'groq') {
       return this.groqProvider.getModels();
     }
