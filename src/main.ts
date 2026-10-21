@@ -251,6 +251,7 @@ function setupIpcHandlers() {
         content: string;
       }>;
       model?: string;
+      screenCaptureDataUrl?: string;
     };
 
     if (!data.streamId || !data.message) {
@@ -306,6 +307,8 @@ function setupIpcHandlers() {
     const multiPlan = globalTaskPlanner.createPlanFromPrompt(data.message);
     let directActionResultMessage: string | undefined;
 
+    let screenCaptureDataUrl: string | undefined = data.screenCaptureDataUrl;
+
     if (multiPlan && multiPlan.steps.length >= 2) {
       try {
         const executed = await globalTaskExecutor.executePlan(
@@ -345,6 +348,15 @@ function setupIpcHandlers() {
             directAction.toolId,
             directAction.args,
           );
+          if (
+            directAction.toolId === 'analyze_screen' &&
+            actionResult.success &&
+            (actionResult.data as Record<string, unknown>)?.dataUrl
+          ) {
+            screenCaptureDataUrl = (
+              actionResult.data as Record<string, unknown>
+            ).dataUrl as string;
+          }
           directActionResultMessage = `[SYSTEM TOOL RESULT: Tool "${directAction.toolId}" executed. Result: "${actionResult.message}"]`;
           if (!event.sender.isDestroyed()) {
             event.sender.send('desktop:activityEvent', {
@@ -356,7 +368,8 @@ function setupIpcHandlers() {
               category: 'tool',
               message: actionResult.message,
               durationMs: actionResult.durationMs,
-              imageUrl: (actionResult.data as any)?.dataUrl,
+              imageUrl: (actionResult.data as Record<string, unknown>)
+                ?.dataUrl as string | undefined,
             });
           }
         } catch (toolErr) {
@@ -388,6 +401,7 @@ function setupIpcHandlers() {
         messages,
         model: data.model,
         searchContext,
+        screenCaptureDataUrl,
       },
       (chunk) => {
         if (!event.sender.isDestroyed()) {
@@ -691,6 +705,17 @@ function setupIpcHandlers() {
     if (!isValidSender(event)) throw new Error('Unauthorized IPC sender');
     return aiManager.validateOllama();
   });
+
+  // Multimodal Screen Vision & Visual Diagnostics
+  ipcMain.handle(
+    'desktop:captureScreenAndAnalyze',
+    async (event, prompt?: unknown) => {
+      if (!isValidSender(event)) throw new Error('Unauthorized IPC sender');
+      const query =
+        typeof prompt === 'string' ? prompt : 'Inspect desktop screen';
+      return globalToolRegistry.executeTool('analyze_screen', { query });
+    },
+  );
 }
 
 const createWindow = () => {

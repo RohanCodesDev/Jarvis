@@ -153,8 +153,17 @@ export class GroqProvider implements AIProvider {
       return;
     }
 
+    const nonSystemMessages = options.messages.filter(
+      (m) => m.role !== 'system',
+    );
+    const hasVision =
+      !!options.screenCaptureDataUrl ||
+      nonSystemMessages.some((m) => !!m.imageUrl);
+
     let model = options.model?.trim();
-    if (!model || model.includes('/')) {
+    if (hasVision) {
+      model = 'llama-3.2-11b-vision-preview';
+    } else if (!model || model.includes('/')) {
       const settings = loadSettings();
       model = settings.groqModel || 'openai/gpt-oss-120b';
     }
@@ -165,15 +174,42 @@ export class GroqProvider implements AIProvider {
       finalSystemPrompt += `\n\n${options.searchContext}`;
     }
 
-    const nonSystemMessages = options.messages.filter(
-      (m) => m.role !== 'system',
-    );
     const messages = [
       {
         role: 'system' as const,
         content: finalSystemPrompt,
       },
-      ...nonSystemMessages,
+      ...nonSystemMessages.map((m, idx) => {
+        const isLastUser =
+          idx === nonSystemMessages.length - 1 && m.role === 'user';
+        const img =
+          m.imageUrl || (isLastUser ? options.screenCaptureDataUrl : undefined);
+        if (img) {
+          const textContent =
+            typeof m.content === 'string'
+              ? m.content
+              : Array.isArray(m.content)
+                ? m.content.find((p) => p.type === 'text')?.text || ''
+                : '';
+          return {
+            role: m.role,
+            content: [
+              {
+                type: 'text',
+                text: textContent || 'Analyze this desktop screen capture.',
+              },
+              {
+                type: 'image_url',
+                image_url: { url: img },
+              },
+            ],
+          };
+        }
+        return {
+          role: m.role,
+          content: m.content,
+        };
+      }),
     ];
 
     let response: Response;

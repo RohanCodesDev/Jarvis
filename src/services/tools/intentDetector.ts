@@ -78,7 +78,34 @@ export function detectDirectIntent(input: string): DetectedAction | null {
 
   const lower = clean.toLowerCase();
 
-  // 1. Screen Capture
+  // 1a. Multimodal Screen Vision & Inspection
+  const visionTriggers = [
+    'look at my screen',
+    'look at screen',
+    'what is on my screen',
+    "what's on my screen",
+    'whats on my screen',
+    'inspect my screen',
+    'inspect screen',
+    'analyze my screen',
+    'analyze screen',
+    'see my screen',
+    'can you see my screen',
+    'check my screen',
+    'explain what is on my screen',
+    "explain what's on my screen",
+    'debug my screen',
+    'debug this error on my screen',
+  ];
+  if (visionTriggers.some((t) => lower.includes(t))) {
+    return {
+      toolId: 'analyze_screen',
+      args: { query: clean },
+      confidence: 'high',
+    };
+  }
+
+  // 1b. Screen Capture (File Export)
   const screenshotTriggers = [
     'take screenshot',
     'capture screen',

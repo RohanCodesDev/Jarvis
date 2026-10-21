@@ -27,12 +27,22 @@ export class MockAIProvider implements AIProvider {
     callbacks: AIStreamCallbacks,
   ): Promise<void> {
     const lastMsg = options.messages[options.messages.length - 1];
-    const userQuery = lastMsg ? lastMsg.content.toLowerCase() : '';
+    const userQuery =
+      typeof lastMsg?.content === 'string' ? lastMsg.content.toLowerCase() : '';
 
     let reply =
       'Diagnostics normal. Operating in simulated offline mode. Configure your OpenRouter key in Settings to activate neural cloud processing.';
 
-    if (userQuery.includes('diagnostic') || userQuery.includes('system')) {
+    if (
+      options.screenCaptureDataUrl ||
+      options.messages.some((m) => !!m.imageUrl)
+    ) {
+      reply =
+        'Optical receptor feed acquired. Primary display captured (1920x1080). Visual telemetry indicates an active Windows desktop workstation with code editor and terminal windows. No critical anomalies detected, sir.';
+    } else if (
+      userQuery.includes('diagnostic') ||
+      userQuery.includes('system')
+    ) {
       reply =
         'System integrity: 100%. All local telemetry nodes nominal. Latency: 12ms. Standing by for instructions.';
     } else if (userQuery.includes('memory')) {

@@ -418,7 +418,7 @@ export const JarvisHUD: React.FC = () => {
     ],
   );
 
-  const handleSendMessage = (text: string) => {
+  const handleSendMessage = (text: string, screenCaptureDataUrl?: string) => {
     const trimmed = text.trim();
     if (!trimmed || assistantState === 'thinking') return;
 
@@ -539,6 +539,7 @@ export const JarvisHUD: React.FC = () => {
           message: text,
           history,
           model: modelToSend,
+          screenCaptureDataUrl,
         },
         (event) => {
           if (event.chunk) {
@@ -629,6 +630,46 @@ export const JarvisHUD: React.FC = () => {
         speakText(reply, () => setAssistantState('idle'));
       }, 800);
     }
+  };
+
+  const handleInspectScreen = async (promptText?: string) => {
+    const prompt =
+      promptText ||
+      'Inspect my screen and explain what is currently displayed, noting any open code, errors, or windows.';
+    setAssistantState('thinking');
+    addActivity(
+      'info',
+      'tool',
+      'Optical receptor scan initiated. Capturing primary display...',
+    );
+
+    let capturedDataUrl: string | undefined;
+    try {
+      if (window.jarvisDesktop?.captureScreenAndAnalyze) {
+        const capResult =
+          await window.jarvisDesktop.captureScreenAndAnalyze(prompt);
+        if (capResult.success && capResult.data) {
+          const dUrl = (capResult.data as Record<string, unknown>)?.dataUrl as
+            | string
+            | undefined;
+          if (dUrl) {
+            capturedDataUrl = dUrl;
+            setTacticalCard({
+              id: 'tactical-vision-' + Date.now(),
+              title: 'OPTICAL RECEPTOR SCAN ACTIVE',
+              message: `Primary display buffer acquired. Analyzing onscreen visuals for: "${prompt}"`,
+              category: 'tool',
+              level: 'info',
+              imageUrl: dUrl,
+            });
+          }
+        }
+      }
+    } catch (capErr) {
+      console.warn('[HUD] Screen capture trigger error:', capErr);
+    }
+
+    handleSendMessage(prompt, capturedDataUrl);
   };
 
   const handleVoiceInputTrigger = () => {
@@ -940,6 +981,7 @@ export const JarvisHUD: React.FC = () => {
             assistantState={assistantState}
             onSendMessage={handleSendMessage}
             onVoiceTrigger={handleVoiceInputTrigger}
+            onInspectScreen={handleInspectScreen}
           />
         </div>
       </main>

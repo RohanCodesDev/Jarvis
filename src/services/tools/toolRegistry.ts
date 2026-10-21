@@ -175,6 +175,30 @@ export class ToolRegistry {
       },
     });
 
+    // 10b. Multimodal Screen Vision & Visual Inspection
+    this.registerTool({
+      id: 'analyze_screen',
+      name: 'Multimodal Screen Vision & Visual Inspection',
+      description:
+        'Captures the active desktop screen and feeds the visual frame to multimodal AI to inspect code, errors, diagrams, or open windows.',
+      permission: 'low_risk',
+      schema: z
+        .object({
+          query: z.string().optional(),
+        })
+        .catchall(z.unknown()),
+      execute: async (args: { query?: string }) => {
+        const cap = await capturePrimaryScreen();
+        if (!cap.success) return cap;
+        return {
+          success: true,
+          message: `Optical receptor scan acquired. Analyzing active display buffer for: "${args.query || 'Desktop inspection'}"...`,
+          data: cap.data,
+          durationMs: cap.durationMs,
+        };
+      },
+    });
+
     // 11. Clipboard Control
     this.registerTool({
       id: 'clipboard_control',

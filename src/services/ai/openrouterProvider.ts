@@ -175,8 +175,24 @@ export class OpenRouterProvider implements AIProvider {
       return;
     }
 
-    const model =
+    const nonSystemMessages = options.messages.filter(
+      (m) => m.role !== 'system',
+    );
+
+    const hasVision =
+      !!options.screenCaptureDataUrl ||
+      nonSystemMessages.some((m) => !!m.imageUrl);
+
+    let model =
       options.model?.trim() || 'meta-llama/llama-3.3-70b-instruct:free';
+    if (
+      hasVision &&
+      (model.includes('3.3-70b') ||
+        model.includes('deepseek') ||
+        model.includes('gpt-oss'))
+    ) {
+      model = 'meta-llama/llama-3.2-11b-vision-instruct:free';
+    }
     const temperature = options.temperature ?? 0.7;
 
     // 2. Prepare message history with JARVIS system prompt
@@ -185,15 +201,47 @@ export class OpenRouterProvider implements AIProvider {
       finalSystemPrompt += `\n\n${options.searchContext}`;
     }
 
-    const nonSystemMessages = options.messages.filter(
-      (m) => m.role !== 'system',
-    );
     const messages = [
       {
         role: 'system' as const,
         content: finalSystemPrompt,
       },
-      ...nonSystemMessages,
+      ...nonSystemMessages.map((m, idx) => {
+        const isLastUser =
+          idx === nonSystemMessages.length - 1 && m.role === 'user';
+        const img =
+          m.imageUrl || (isLastUser ? options.screenCaptureDataUrl : undefined);
+        if (img) {
+          const textContent =
+            typeof m.content === 'string'
+              ? m.content
+              : Array.isArray(m.content)
+                ? (
+                    m.content as Array<{
+                      type: string;
+                      text?: string;
+                    }>
+                  ).find((p) => p.type === 'text')?.text || ''
+                : '';
+          return {
+            role: m.role,
+            content: [
+              {
+                type: 'text',
+                text: textContent || 'Analyze this desktop screen capture.',
+              },
+              {
+                type: 'image_url',
+                image_url: { url: img },
+              },
+            ],
+          };
+        }
+        return {
+          role: m.role,
+          content: m.content,
+        };
+      }),
     ];
 
     // 3. Initiate streaming request

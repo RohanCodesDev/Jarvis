@@ -177,6 +177,9 @@ const desktopAPI: DesktopBridgeAPI = {
   validateOllama: async () => {
     return ipcRenderer.invoke('desktop:validateOllama');
   },
+  captureScreenAndAnalyze: async (prompt) => {
+    return ipcRenderer.invoke('desktop:captureScreenAndAnalyze', prompt);
+  },
 };
 
 contextBridge.exposeInMainWorld('jarvisDesktop', desktopAPI);

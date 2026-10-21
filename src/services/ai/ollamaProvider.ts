@@ -77,12 +77,30 @@ export class OllamaProvider implements AIProvider {
       systemContent += `\n\n${options.searchContext}`;
     }
 
+    const cleanImg = options.screenCaptureDataUrl
+      ? options.screenCaptureDataUrl.replace(/^data:image\/[a-z]+;base64,/, '')
+      : undefined;
+
     const messages = [
       { role: 'system', content: systemContent },
-      ...options.messages.map((m) => ({
-        role: m.role,
-        content: m.content,
-      })),
+      ...options.messages.map((m, idx) => {
+        const isLastUser =
+          idx === options.messages.length - 1 && m.role === 'user';
+        const img =
+          m.imageUrl?.replace(/^data:image\/[a-z]+;base64,/, '') ||
+          (isLastUser ? cleanImg : undefined);
+        const textContent =
+          typeof m.content === 'string'
+            ? m.content
+            : Array.isArray(m.content)
+              ? m.content.find((p) => p.type === 'text')?.text || ''
+              : '';
+        return {
+          role: m.role,
+          content: textContent,
+          ...(img ? { images: [img] } : {}),
+        };
+      }),
     ];
 
     try {

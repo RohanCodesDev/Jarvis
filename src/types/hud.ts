@@ -107,6 +107,7 @@ export interface DesktopBridgeAPI {
         content: string;
       }>;
       model?: string;
+      screenCaptureDataUrl?: string;
     },
     onChunk: (event: ChatStreamChunkEvent) => void,
   ) => () => void;
@@ -186,6 +187,9 @@ export interface DesktopBridgeAPI {
     ) => void,
   ) => () => void;
   validateOllama?: () => Promise<{ valid: boolean; error?: string }>;
+  captureScreenAndAnalyze?: (
+    prompt?: string,
+  ) => Promise<import('../services/tools/toolTypes').ToolExecutionResult>;
 }
 
 declare global {

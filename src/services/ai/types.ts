@@ -1,8 +1,15 @@
 import { z } from 'zod';
 
+export interface AIMessageContentPart {
+  type: 'text' | 'image_url';
+  text?: string;
+  image_url?: { url: string };
+}
+
 export interface AIMessage {
   role: 'system' | 'user' | 'assistant';
-  content: string;
+  content: string | AIMessageContentPart[];
+  imageUrl?: string;
 }
 
 export interface AIStreamCallbacks {
@@ -20,6 +27,7 @@ export interface SendMessageOptions {
   temperature?: number;
   maxTokens?: number;
   searchContext?: string;
+  screenCaptureDataUrl?: string;
   signal?: AbortSignal;
 }
 
@@ -43,7 +51,11 @@ export interface AIProvider {
 // Zod validation schemas
 export const AIMessageSchema = z.object({
   role: z.enum(['system', 'user', 'assistant']),
-  content: z.string().min(1, 'Message content cannot be empty'),
+  content: z.union([
+    z.string().min(1, 'Message content cannot be empty'),
+    z.array(z.any()),
+  ]),
+  imageUrl: z.string().optional(),
 });
 
 export const SendMessageOptionsSchema = z.object({
@@ -52,4 +64,5 @@ export const SendMessageOptionsSchema = z.object({
   temperature: z.number().min(0).max(2).optional(),
   maxTokens: z.number().positive().optional(),
   searchContext: z.string().optional(),
+  screenCaptureDataUrl: z.string().optional(),
 });
