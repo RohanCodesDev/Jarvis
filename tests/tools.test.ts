@@ -240,12 +240,15 @@ describe('Stage 5 & God-Mode: Safe Desktop Actions & Windows Automation', () => 
       } catch {}
     });
 
-    it('resolves environment variables and defaults bare filenames to Desktop', () => {
+    it('resolves environment variables, strips quotes, and defaults bare filenames to Desktop', () => {
       const expanded = resolveUserPath('%USERPROFILE%\\Desktop\\rohan.txt');
       expect(expanded).toBe(path.join(os.homedir(), 'Desktop', 'rohan.txt'));
 
       const bare = resolveUserPath('rohan.txt');
       expect(bare).toBe(path.join(os.homedir(), 'Desktop', 'rohan.txt'));
+
+      const quoted = resolveUserPath('"rohan.txt"');
+      expect(quoted).toBe(path.join(os.homedir(), 'Desktop', 'rohan.txt'));
 
       const tilde = resolveUserPath('~/Desktop/test.txt');
       expect(tilde).toBe(path.join(os.homedir(), 'Desktop', 'test.txt'));
@@ -279,6 +282,13 @@ describe('Stage 5 & God-Mode: Safe Desktop Actions & Windows Automation', () => 
       expect(fileCreateIntent?.toolId).toBe('write_file');
       expect(fileCreateIntent?.args.filePath).toBe('rohan.txt');
       expect(fileCreateIntent?.args.content).toBe('this is jarvis');
+
+      const flexibleFileIntent = detectDirectIntent(
+        'create a file on my desktop called notes.txt and write "hello world"',
+      );
+      expect(flexibleFileIntent?.toolId).toBe('write_file');
+      expect(flexibleFileIntent?.args.filePath).toBe('notes.txt');
+      expect(flexibleFileIntent?.args.content).toBe('hello world');
 
       const closeCalcIntent = detectDirectIntent('close calculator');
       expect(closeCalcIntent?.toolId).toBe('close_app');

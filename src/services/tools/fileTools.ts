@@ -10,6 +10,19 @@ const APPROVED_ROOTS = [
   process.cwd(),
 ];
 
+// Add OneDrive folders if they exist on Windows
+try {
+  const oneDriveRoot = path.join(os.homedir(), 'OneDrive');
+  if (fs.existsSync(oneDriveRoot)) {
+    const odDesktop = path.join(oneDriveRoot, 'Desktop');
+    const odDocs = path.join(oneDriveRoot, 'Documents');
+    if (fs.existsSync(odDesktop)) APPROVED_ROOTS.push(odDesktop);
+    if (fs.existsSync(odDocs)) APPROVED_ROOTS.push(odDocs);
+  }
+} catch {
+  // Ignore permission / access errors
+}
+
 const BLOCKED_PATTERNS = [
   /windows/i,
   /system32/i,
@@ -22,11 +35,11 @@ const BLOCKED_PATTERNS = [
 ];
 
 /**
- * Resolves user path, expanding %USERPROFILE%, ~, and defaulting bare filenames to Desktop.
+ * Resolves user path, expanding %USERPROFILE%, ~, stripping quotes, and defaulting bare filenames to Desktop.
  */
 export function resolveUserPath(rawPath: string): string {
   if (!rawPath) return path.join(os.homedir(), 'Desktop');
-  let p = rawPath.trim();
+  let p = rawPath.trim().replace(/^["']+|["']+$/g, '');
 
   // Expand Windows environment variables
   p = p.replace(/%USERPROFILE%/gi, os.homedir());
@@ -160,7 +173,9 @@ export async function createSafeFile(
   content: string,
 ): Promise<ToolExecutionResult> {
   const startTime = performance.now();
-  let targetPath = (filePath || 'untitled.txt').trim();
+  let targetPath = (filePath || 'untitled.txt')
+    .trim()
+    .replace(/^["']+|["']+$/g, '');
 
   // If no extension is specified, default to .txt
   if (!path.extname(targetPath)) {

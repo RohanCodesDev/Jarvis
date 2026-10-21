@@ -396,6 +396,7 @@ function setupIpcHandlers() {
         if (modelPlan && modelPlan.steps.length >= 2) {
           try {
             finalResponseText = fullResponse
+              .replace(/\[PLAN:\s*\[[\s\S]*?\]\s*\]/i, '')
               .replace(/\[PLAN:\s*[\s\S]+?\]/i, '')
               .trim();
             const executed = await globalTaskExecutor.executePlan(

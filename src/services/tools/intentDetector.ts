@@ -19,18 +19,16 @@ export function detectDirectIntent(input: string): DetectedAction | null {
   if (!input) return null;
   const clean = input.trim();
   // 0. Direct File Creation
-  // e.g. "create a file rohan.txt in my desktop and write \"this is jarvis\""
-  const createFileMatch =
-    clean.match(
-      /(?:create|make|write)\s+(?:a\s+)?file\s+([a-zA-Z0-9_\-./\\]+)(?:\s+(?:in|on)\s+(?:my\s+)?desktop)?\s+(?:and\s+write|with\s+(?:content|text)?|with)\s+["'“]([\s\S]+?)["'”]/i,
-    ) ||
-    clean.match(
-      /(?:create|make|write)\s+(?:a\s+)?file\s+([a-zA-Z0-9_\-./\\]+)(?:\s+(?:in|on)\s+(?:my\s+)?desktop)?\s+(?:and\s+write|with\s+(?:content|text)?|with)\s+(.+)/i,
-    );
+  // e.g. "create a file on my desktop called rohan.txt and write \"this is jarvis\""
+  const createFileMatch = clean.match(
+    /(?:create|make|write)\s+(?:a\s+)?(?:new\s+)?(?:text\s+)?file\s+(?:(?:in|on)\s+(?:my\s+)?desktop\s+)?(?:(?:called|named)\s+)?([a-zA-Z0-9_\-./\\]+)(?:\s+(?:in|on)\s+(?:my\s+)?desktop)?\s+(?:and\s+write|with\s+(?:content|text)?|with|saying)\s+["'“]?([\s\S]+?)["'”]?$/i,
+  );
 
   if (createFileMatch && createFileMatch[1]) {
     const rawFileName = createFileMatch[1].trim();
-    const fileContent = createFileMatch[2] ? createFileMatch[2].trim() : '';
+    const fileContent = createFileMatch[2]
+      ? createFileMatch[2].trim().replace(/^["'“]|["'”]$/g, '')
+      : '';
     return {
       toolId: 'write_file',
       args: { filePath: rawFileName, content: fileContent },
@@ -39,7 +37,7 @@ export function detectDirectIntent(input: string): DetectedAction | null {
   }
 
   const bareFileMatch = clean.match(
-    /^(?:create|make)\s+(?:a\s+)?file\s+([a-zA-Z0-9_\-./\\]+)(?:\s+(?:in|on)\s+(?:my\s+)?desktop)?$/i,
+    /^(?:create|make)\s+(?:a\s+)?(?:new\s+)?(?:text\s+)?file\s+(?:(?:in|on)\s+(?:my\s+)?desktop\s+)?(?:(?:called|named)\s+)?([a-zA-Z0-9_\-./\\]+)(?:\s+(?:in|on)\s+(?:my\s+)?desktop)?$/i,
   );
   if (bareFileMatch && bareFileMatch[1]) {
     return {
