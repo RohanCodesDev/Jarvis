@@ -12,6 +12,7 @@ import {
   isPathSafe,
   createSafeFile,
   readSafeFile,
+  resolveUserPath,
 } from '../src/services/tools/fileTools';
 import { controlVolume, controlMedia } from '../src/services/tools/mediaTools';
 import { getNetworkDiagnostics } from '../src/services/tools/networkTools';
@@ -239,6 +240,17 @@ describe('Stage 5 & God-Mode: Safe Desktop Actions & Windows Automation', () => 
       } catch {}
     });
 
+    it('resolves environment variables and defaults bare filenames to Desktop', () => {
+      const expanded = resolveUserPath('%USERPROFILE%\\Desktop\\rohan.txt');
+      expect(expanded).toBe(path.join(os.homedir(), 'Desktop', 'rohan.txt'));
+
+      const bare = resolveUserPath('rohan.txt');
+      expect(bare).toBe(path.join(os.homedir(), 'Desktop', 'rohan.txt'));
+
+      const tilde = resolveUserPath('~/Desktop/test.txt');
+      expect(tilde).toBe(path.join(os.homedir(), 'Desktop', 'test.txt'));
+    });
+
     it('rejects disallowed file extensions', async () => {
       const badFile = path.join(
         os.homedir(),
@@ -260,6 +272,13 @@ describe('Stage 5 & God-Mode: Safe Desktop Actions & Windows Automation', () => 
         args: { app: 'spotify' },
         confidence: 'high',
       });
+
+      const fileCreateIntent = detectDirectIntent(
+        'create a file rohan.txt in my desktop and write "this is jarvis"',
+      );
+      expect(fileCreateIntent?.toolId).toBe('write_file');
+      expect(fileCreateIntent?.args.filePath).toBe('rohan.txt');
+      expect(fileCreateIntent?.args.content).toBe('this is jarvis');
 
       const closeCalcIntent = detectDirectIntent('close calculator');
       expect(closeCalcIntent?.toolId).toBe('close_app');

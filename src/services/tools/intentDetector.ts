@@ -18,6 +18,37 @@ export interface ParsedDirectiveResult {
 export function detectDirectIntent(input: string): DetectedAction | null {
   if (!input) return null;
   const clean = input.trim();
+  // 0. Direct File Creation
+  // e.g. "create a file rohan.txt in my desktop and write \"this is jarvis\""
+  const createFileMatch =
+    clean.match(
+      /(?:create|make|write)\s+(?:a\s+)?file\s+([a-zA-Z0-9_\-./\\]+)(?:\s+(?:in|on)\s+(?:my\s+)?desktop)?\s+(?:and\s+write|with\s+(?:content|text)?|with)\s+["'“]([\s\S]+?)["'”]/i,
+    ) ||
+    clean.match(
+      /(?:create|make|write)\s+(?:a\s+)?file\s+([a-zA-Z0-9_\-./\\]+)(?:\s+(?:in|on)\s+(?:my\s+)?desktop)?\s+(?:and\s+write|with\s+(?:content|text)?|with)\s+(.+)/i,
+    );
+
+  if (createFileMatch && createFileMatch[1]) {
+    const rawFileName = createFileMatch[1].trim();
+    const fileContent = createFileMatch[2] ? createFileMatch[2].trim() : '';
+    return {
+      toolId: 'write_file',
+      args: { filePath: rawFileName, content: fileContent },
+      confidence: 'high',
+    };
+  }
+
+  const bareFileMatch = clean.match(
+    /^(?:create|make)\s+(?:a\s+)?file\s+([a-zA-Z0-9_\-./\\]+)(?:\s+(?:in|on)\s+(?:my\s+)?desktop)?$/i,
+  );
+  if (bareFileMatch && bareFileMatch[1]) {
+    return {
+      toolId: 'write_file',
+      args: { filePath: bareFileMatch[1].trim(), content: '' },
+      confidence: 'high',
+    };
+  }
+
   const lower = clean.toLowerCase();
 
   // 1. Screen Capture
