@@ -189,9 +189,10 @@ export class OpenRouterProvider implements AIProvider {
       hasVision &&
       (model.includes('3.3-70b') ||
         model.includes('deepseek') ||
-        model.includes('gpt-oss'))
+        model.includes('gpt-oss') ||
+        model.includes('free'))
     ) {
-      model = 'meta-llama/llama-3.2-11b-vision-instruct:free';
+      model = 'openrouter/free';
     }
     const temperature = options.temperature ?? 0.7;
 

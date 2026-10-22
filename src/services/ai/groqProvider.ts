@@ -160,10 +160,15 @@ export class GroqProvider implements AIProvider {
       !!options.screenCaptureDataUrl ||
       nonSystemMessages.some((m) => !!m.imageUrl);
 
-    let model = options.model?.trim();
     if (hasVision) {
-      model = 'llama-3.2-11b-vision-preview';
-    } else if (!model || model.includes('/')) {
+      callbacks.onError(
+        'Groq currently only supports text and audio processing. Optical screen inspection requires OpenRouter. Please select OpenRouter in Settings.',
+      );
+      return;
+    }
+
+    let model = options.model?.trim();
+    if (!model || model.includes('/')) {
       const settings = loadSettings();
       model = settings.groqModel || 'openai/gpt-oss-120b';
     }

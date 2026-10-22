@@ -114,7 +114,7 @@ describe('Multimodal Screen Vision & Desktop Awareness', () => {
       );
 
       expect(capturedBody).toBeDefined();
-      expect(capturedBody.model).toContain('vision');
+      expect(capturedBody.model).toBe('openrouter/free');
       const userMsg = capturedBody.messages.find((m: any) => m.role === 'user');
       expect(Array.isArray(userMsg.content)).toBe(true);
       expect(userMsg.content[1].type).toBe('image_url');
@@ -123,27 +123,10 @@ describe('Multimodal Screen Vision & Desktop Awareness', () => {
       );
     });
 
-    it('GroqProvider routes to llama-3.2-11b-vision-preview for screen captures', async () => {
-      let capturedBody: any = null;
-      const fakeFetch = vi
-        .fn()
-        .mockImplementation(async (_url: string, init: RequestInit) => {
-          capturedBody = JSON.parse(init.body as string);
-          return {
-            ok: true,
-            status: 200,
-            body: {
-              getReader: () => ({
-                read: vi
-                  .fn()
-                  .mockResolvedValueOnce({ done: true, value: undefined }),
-              }),
-            },
-          };
-        });
-      globalThis.fetch = fakeFetch;
-
+    it('GroqProvider emits a clear error explaining that optical vision requires OpenRouter', async () => {
       const provider = new GroqProvider(() => 'gsk_testkey');
+      let errorMessage = '';
+
       await provider.sendMessage(
         {
           messages: [
@@ -154,17 +137,14 @@ describe('Multimodal Screen Vision & Desktop Awareness', () => {
         {
           onChunk: () => {},
           onDone: () => {},
-          onError: () => {},
+          onError: (err) => {
+            errorMessage = err;
+          },
         },
       );
 
-      expect(capturedBody).toBeDefined();
-      expect(capturedBody.model).toBe('llama-3.2-11b-vision-preview');
-      const userMsg = capturedBody.messages.find((m: any) => m.role === 'user');
-      expect(Array.isArray(userMsg.content)).toBe(true);
-      expect(userMsg.content[1].image_url.url).toBe(
-        'data:image/png;base64,FAKEDIAGRAM',
-      );
+      expect(errorMessage).toContain('Groq currently only supports text');
+      expect(errorMessage).toContain('OpenRouter');
     });
 
     it('OllamaProvider passes stripped base64 images array in /api/chat payload', async () => {

@@ -41,7 +41,8 @@ export async function capturePrimaryScreen(): Promise<ToolExecutionResult> {
     const primary = sources[0];
     const image = primary.thumbnail;
     const pngBuffer = image.toPNG();
-    const dataUrl = image.toDataURL();
+    const jpegBuffer = image.toJPEG(82);
+    const dataUrl = `data:image/jpeg;base64,${jpegBuffer.toString('base64')}`;
 
     const outputDir = path.join(os.homedir(), 'Desktop', 'JARVIS_Screenshots');
     fs.mkdirSync(outputDir, { recursive: true });

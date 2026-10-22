@@ -27,12 +27,16 @@ export class AIManager {
   /**
    * Determine the current provider: OpenRouter, Groq, Ollama, or Mock fallback.
    */
-  public getActiveProvider(preferMock = false): AIProvider {
+  public getActiveProvider(preferMock = false, hasVision = false): AIProvider {
     if (preferMock) return this.mockProvider;
 
     const settings = loadSettings();
     if (settings.cloudProvider === 'ollama') {
       return this.ollamaProvider;
+    }
+    // If request requires vision, route to OpenRouter since Groq does not have vision endpoints
+    if (hasVision && hasApiKey()) {
+      return this.openRouterProvider;
     }
     if (settings.cloudProvider === 'groq' && hasGroqKey()) {
       return this.groqProvider;
@@ -112,7 +116,10 @@ export class AIManager {
     const controller = new AbortController();
     this.activeStreams.set(streamId, controller);
 
-    const provider = this.getActiveProvider();
+    const hasVision =
+      !!options.screenCaptureDataUrl ||
+      options.messages.some((m) => !!m.imageUrl);
+    const provider = this.getActiveProvider(false, hasVision);
 
     try {
       await provider.sendMessage(
