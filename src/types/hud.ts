@@ -190,6 +190,32 @@ export interface DesktopBridgeAPI {
   captureScreenAndAnalyze?: (
     prompt?: string,
   ) => Promise<import('../services/tools/toolTypes').ToolExecutionResult>;
+  onTriggerVoiceInput?: (callback: () => void) => () => void;
+  // Autonomous Workflows & System Automation
+  createWorkflow?: (
+    params: import('../services/automation/workflowTypes').CreateWorkflowParams,
+  ) => Promise<import('../services/automation/workflowTypes').WorkflowItem>;
+  getWorkflows?: () => Promise<
+    import('../services/automation/workflowTypes').WorkflowItem[]
+  >;
+  toggleWorkflow?: (
+    id: string,
+  ) => Promise<import('../services/automation/workflowTypes').WorkflowItem | null>;
+  deleteWorkflow?: (id: string) => Promise<{ success: boolean }>;
+  executeWorkflowNow?: (
+    id: string,
+  ) => Promise<{ success: boolean; message: string }>;
+  onWorkflowTriggered?: (
+    callback: (data: {
+      workflow: import('../services/automation/workflowTypes').WorkflowItem;
+      result: { success: boolean; message: string };
+    }) => void,
+  ) => () => void;
+  onWorkflowUpdated?: (
+    callback: (
+      workflow: import('../services/automation/workflowTypes').WorkflowItem,
+    ) => void,
+  ) => () => void;
 }
 
 declare global {

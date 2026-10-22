@@ -121,10 +121,35 @@ export class AIManager {
       options.messages.some((m) => !!m.imageUrl);
     const provider = this.getActiveProvider(false, hasVision);
 
+    // Select dedicated vision model if image payload is present
+    let modelToUse = options.model;
+    if (hasVision) {
+      if (provider === this.openRouterProvider) {
+        const isVisionCapable =
+          modelToUse &&
+          (modelToUse.includes('vision') ||
+            modelToUse.includes('claude') ||
+            modelToUse.includes('gemini') ||
+            modelToUse.includes('vl') ||
+            modelToUse.includes('4o'));
+        if (!isVisionCapable) {
+          modelToUse = 'meta-llama/llama-3.2-11b-vision-instruct:free';
+        }
+      } else if (provider === this.ollamaProvider) {
+        const isOllamaVision =
+          modelToUse &&
+          (modelToUse.includes('vision') || modelToUse.includes('llava'));
+        if (!isOllamaVision) {
+          modelToUse = 'llama3.2-vision:latest';
+        }
+      }
+    }
+
     try {
       await provider.sendMessage(
         {
           ...options,
+          model: modelToUse,
           signal: controller.signal,
         },
         {
@@ -137,7 +162,54 @@ export class AIManager {
             this.activeStreams.delete(streamId);
             onDone(full, meta);
           },
-          onError: (err) => {
+          onError: async (err) => {
+            // Transparent multi-provider auto-failover:
+            // If Groq encounters rate-limit (429) or upstream outage, fall back to OpenRouter free model
+            const isRateLimitOrOutage =
+              typeof err === 'string' &&
+              (err.includes('429') ||
+                err.includes('rate_limit') ||
+                err.includes('503') ||
+                err.includes('500') ||
+                err.includes('failed to fetch'));
+
+            if (
+              provider === this.groqProvider &&
+              hasApiKey() &&
+              isRateLimitOrOutage &&
+              !controller.signal.aborted
+            ) {
+              console.warn(
+                '[AIManager] Primary provider encountered temporary limit. Failing over to OpenRouter Free tier...',
+                err,
+              );
+              try {
+                await this.openRouterProvider.sendMessage(
+                  {
+                    ...options,
+                    model: 'meta-llama/llama-3.3-70b-instruct:free',
+                    signal: controller.signal,
+                  },
+                  {
+                    onChunk: (c) => {
+                      if (!controller.signal.aborted) onChunk(c);
+                    },
+                    onDone: (full, meta) => {
+                      this.activeStreams.delete(streamId);
+                      onDone(full, meta);
+                    },
+                    onError: (fallbackErr) => {
+                      this.activeStreams.delete(streamId);
+                      onError(fallbackErr);
+                    },
+                  },
+                );
+                return;
+              } catch (fallbackFail) {
+                console.warn('[AIManager] Failover also failed:', fallbackFail);
+              }
+            }
+
             this.activeStreams.delete(streamId);
             onError(err);
           },

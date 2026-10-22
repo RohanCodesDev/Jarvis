@@ -320,6 +320,7 @@ export class OpenRouterProvider implements AIProvider {
     const decoder = new TextDecoder('utf-8');
     let buffer = '';
     let fullResponse = '';
+    let fullReasoning = '';
 
     try {
       while (true) {
@@ -338,10 +339,29 @@ export class OpenRouterProvider implements AIProvider {
 
         for (const line of lines) {
           const trimmed = line.trim();
-          if (!trimmed || !trimmed.startsWith('data:')) continue;
+          if (!trimmed) continue;
+
+          // Check for non-SSE JSON error payload (e.g. { error: { message: ... } })
+          if (trimmed.startsWith('{') && trimmed.includes('"error"')) {
+            try {
+              const errPayload = JSON.parse(trimmed) as {
+                error?: { message?: string };
+              };
+              if (errPayload.error?.message) {
+                callbacks.onError(`OpenRouter provider error: ${errPayload.error.message}`);
+                return;
+              }
+            } catch {}
+          }
+
+          if (!trimmed.startsWith('data:')) continue;
 
           const dataStr = trimmed.slice(5).trim();
           if (dataStr === '[DONE]') {
+            if (!fullResponse.trim() && fullReasoning.trim()) {
+              fullResponse = fullReasoning.trim();
+              callbacks.onChunk(fullResponse);
+            }
             callbacks.onDone(fullResponse, { model });
             return;
           }
@@ -349,15 +369,27 @@ export class OpenRouterProvider implements AIProvider {
           try {
             const parsed = JSON.parse(dataStr) as {
               choices?: Array<{
-                delta?: { content?: string };
+                delta?: { content?: string; reasoning?: string; reasoning_content?: string };
                 finish_reason?: string;
               }>;
+              error?: { message?: string; code?: number };
             };
 
-            const deltaContent = parsed.choices?.[0]?.delta?.content;
+            if (parsed.error) {
+              const errMsg = parsed.error.message || JSON.stringify(parsed.error);
+              callbacks.onError(`OpenRouter provider error: ${errMsg}`);
+              return;
+            }
+
+            const delta = parsed.choices?.[0]?.delta;
+            const deltaContent = delta?.content;
+            const deltaReasoning = delta?.reasoning || delta?.reasoning_content;
+
             if (deltaContent) {
               fullResponse += deltaContent;
               callbacks.onChunk(deltaContent);
+            } else if (deltaReasoning) {
+              fullReasoning += deltaReasoning;
             }
           } catch {
             // Ignore unparseable SSE heartbeats / comments
@@ -366,6 +398,10 @@ export class OpenRouterProvider implements AIProvider {
       }
 
       // Finish when stream closes if no [DONE] token was explicitly received
+      if (!fullResponse.trim() && fullReasoning.trim()) {
+        fullResponse = fullReasoning.trim();
+        callbacks.onChunk(fullResponse);
+      }
       callbacks.onDone(fullResponse, { model });
     } catch (err: unknown) {
       if (options.signal?.aborted) {

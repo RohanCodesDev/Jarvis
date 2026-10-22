@@ -95,11 +95,25 @@ export class WhisperTranscriber {
                 'Audio capture was too brief or noisy to transcribe. Please speak clearly into the microphone.',
             };
           }
-          return {
-            text: '',
-            source: 'whisper',
-            error: `Groq Whisper failed (${groqRes.status}): ${errDetail}`,
-          };
+          if (groqRes.status === 429) {
+            // If an OpenRouter key is also available, allow it to fall through to OpenRouter Whisper
+            if (key && !key.startsWith('gsk_')) {
+              console.warn('[Whisper] Groq 429 rate limit hit, attempting OpenRouter fallback...');
+            } else {
+              return {
+                text: '',
+                source: 'whisper',
+                error:
+                  'Voice transcription rate limit reached (20 requests/min on Groq free tier). Please wait a few seconds or type your command.',
+              };
+            }
+          } else {
+            return {
+              text: '',
+              source: 'whisper',
+              error: `Groq Whisper failed (${groqRes.status}): ${errDetail}`,
+            };
+          }
         }
       } catch (groqErr: any) {
         console.warn('[Whisper] Groq STT error:', groqErr);

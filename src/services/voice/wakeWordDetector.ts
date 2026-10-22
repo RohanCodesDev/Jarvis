@@ -30,6 +30,8 @@ export class WakeWordDetector {
   private isSpeechActive = false;
   private silenceFrames = 0;
   private speechFrames = 0;
+  private lastCheckTime = 0;
+  private rateLimitBackoffUntil = 0;
 
   public isSupported(): boolean {
     return (
@@ -169,7 +171,9 @@ export class WakeWordDetector {
         !this.isRunning ||
         this.isPaused ||
         this.isProcessing ||
-        !this.analyser
+        !this.analyser ||
+        Date.now() < this.rateLimitBackoffUntil ||
+        Date.now() - this.lastCheckTime < 5000
       ) {
         return;
       }
@@ -184,22 +188,23 @@ export class WakeWordDetector {
       }
       const rms = Math.sqrt(sum / dataArray.length);
 
-      const ENERGY_THRESHOLD = 0.075;
+      // Filter ambient room noise; require clear vocal prominence
+      const ENERGY_THRESHOLD = 0.14;
 
       if (rms > ENERGY_THRESHOLD) {
         this.speechFrames++;
         this.silenceFrames = 0;
 
-        // When speech is sustained for > 320ms (4 consecutive frames), start collecting audio segment
-        if (this.speechFrames >= 4 && !this.isSpeechActive) {
+        // When speech is sustained for > 400ms (5 consecutive frames), start collecting audio segment
+        if (this.speechFrames >= 5 && !this.isSpeechActive) {
           this.isSpeechActive = true;
           this.startSegmentRecording();
         }
       } else if (this.isSpeechActive) {
         this.silenceFrames++;
 
-        // When user pauses for ~400ms (5 frames of silence), finish the speech burst
-        if (this.silenceFrames >= 5) {
+        // When user pauses for ~480ms (6 frames of silence), finish the speech burst
+        if (this.silenceFrames >= 6) {
           this.isSpeechActive = false;
           this.finishSegmentRecording();
         }
@@ -262,8 +267,8 @@ export class WakeWordDetector {
           type: recorder.mimeType || 'audio/webm',
         });
 
-        // Ignore tiny accidental noise clicks (< 3500 bytes)
-        if (blob.size < 3500) {
+        // Ignore accidental noise clicks (< 8000 bytes)
+        if (blob.size < 8000) {
           this.resetRecordingState();
           return;
         }
@@ -288,6 +293,7 @@ export class WakeWordDetector {
     }
 
     this.isProcessing = true;
+    this.lastCheckTime = Date.now();
 
     try {
       // Encode blob to base64
@@ -305,6 +311,11 @@ export class WakeWordDetector {
         base64Audio,
         format: 'webm',
       });
+
+      if (transcription.error && (transcription.error.includes('429') || transcription.error.includes('rate limit'))) {
+        console.warn('[WakeWordDetector] Groq Whisper 429 hit. Backing off wake-word polling for 45s to preserve quota.');
+        this.rateLimitBackoffUntil = Date.now() + 45000;
+      }
 
       const text = (transcription.text || '').trim();
 

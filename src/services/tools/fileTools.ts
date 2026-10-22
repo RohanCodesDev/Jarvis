@@ -221,14 +221,30 @@ export async function createSafeFile(
   try {
     const resolved = check.resolvedPath;
     fs.mkdirSync(path.dirname(resolved), { recursive: true });
+
+    // Safety: If file already exists, create a .bak copy before overwriting
+    let backupPath: string | undefined;
+    if (fs.existsSync(resolved)) {
+      try {
+        backupPath = `${resolved}.bak`;
+        fs.copyFileSync(resolved, backupPath);
+      } catch (bakErr) {
+        console.warn('[FileTools] Failed to create backup:', bakErr);
+      }
+    }
+
     fs.writeFileSync(resolved, content, 'utf-8');
     const elapsed = Math.round(performance.now() - startTime);
+    const backupNotice = backupPath
+      ? ` (previous version preserved as ${path.basename(backupPath)})`
+      : '';
     return {
       success: true,
-      message: `File "${path.basename(resolved)}" created successfully on ${path.dirname(resolved)}, sir.`,
+      message: `File "${path.basename(resolved)}" saved successfully on ${path.dirname(resolved)}${backupNotice}, sir.`,
       data: {
         fileName: path.basename(resolved),
         path: resolved,
+        backupPath,
         sizeBytes: Buffer.byteLength(content, 'utf-8'),
       },
       durationMs: elapsed,

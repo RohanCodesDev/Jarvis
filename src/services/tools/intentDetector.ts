@@ -21,14 +21,15 @@ export function detectDirectIntent(input: string): DetectedAction | null {
   // 0. Direct File Creation
   // e.g. "create a file on my desktop called rohan.txt and write \"this is jarvis\""
   const createFileMatch = clean.match(
-    /(?:create|make|write)\s+(?:a\s+)?(?:new\s+)?(?:text\s+)?file\s+(?:(?:in|on)\s+(?:my\s+)?desktop\s+)?(?:(?:called|named)\s+)?([a-zA-Z0-9_\-./\\]+)(?:\s+(?:in|on)\s+(?:my\s+)?desktop)?\s+(?:and\s+write|with\s+(?:content|text)?|with|saying)\s+["'“]?([\s\S]+?)["'”]?$/i,
+    /(?:create|make|write|save)\s+(?:a\s+)?(?:new\s+)?(?:text\s+)?file\s+(?:(?:in|on)\s+(?:my\s+)?desktop\s+)?(?:(?:called|named)\s+)?([a-zA-Z0-9_\-./\\]+)(?:\s+(?:in|on)\s+(?:my\s+)?desktop)?\s+(?:and\s+(?:write|put)|with\s+(?:content|text)?|with|saying|containing)\s+["'“]?([\s\S]+?)(?:["'”]?\s*(?:in\s+it)?)?$/i,
   );
 
   if (createFileMatch && createFileMatch[1]) {
     const rawFileName = createFileMatch[1].trim();
-    const fileContent = createFileMatch[2]
+    let fileContent = createFileMatch[2]
       ? createFileMatch[2].trim().replace(/^["'“]|["'”]$/g, '')
       : '';
+    fileContent = fileContent.replace(/\s+in\s+it$/i, '');
     return {
       toolId: 'write_file',
       args: { filePath: rawFileName, content: fileContent },
@@ -37,7 +38,7 @@ export function detectDirectIntent(input: string): DetectedAction | null {
   }
 
   const bareFileMatch = clean.match(
-    /^(?:create|make)\s+(?:a\s+)?(?:new\s+)?(?:text\s+)?file\s+(?:(?:in|on)\s+(?:my\s+)?desktop\s+)?(?:(?:called|named)\s+)?([a-zA-Z0-9_\-./\\]+)(?:\s+(?:in|on)\s+(?:my\s+)?desktop)?$/i,
+    /^(?:create|make|write|save)\s+(?:a\s+)?(?:new\s+)?(?:text\s+)?file\s+(?:(?:in|on)\s+(?:my\s+)?desktop\s+)?(?:(?:called|named)\s+)?([a-zA-Z0-9_\-./\\]+)(?:\s+(?:in|on)\s+(?:my\s+)?desktop)?$/i,
   );
   if (bareFileMatch && bareFileMatch[1]) {
     return {
@@ -85,6 +86,18 @@ export function detectDirectIntent(input: string): DetectedAction | null {
     'what is on my screen',
     "what's on my screen",
     'whats on my screen',
+    'read my screen',
+    'read screen',
+    'read what',
+    'what do you see',
+    'what do u see',
+    'what can you see',
+    'what can u see',
+    'what do you see on',
+    'describe my screen',
+    'describe screen',
+    'describe what is on',
+    "describe what's on",
     'inspect my screen',
     'inspect screen',
     'analyze my screen',
@@ -96,6 +109,12 @@ export function detectDirectIntent(input: string): DetectedAction | null {
     "explain what's on my screen",
     'debug my screen',
     'debug this error on my screen',
+    'what is visible',
+    'whats visible',
+    "what's visible",
+    'tell me what you see',
+    'tell me what is on my screen',
+    'show me what is on screen',
   ];
   if (visionTriggers.some((t) => lower.includes(t))) {
     return {
@@ -118,6 +137,124 @@ export function detectDirectIntent(input: string): DetectedAction | null {
     return {
       toolId: 'capture_screen',
       args: {},
+      confidence: 'high',
+    };
+  }
+
+  // 1c. Autonomous Workflows & Scheduled Automations
+  const listWorkflowTriggers = [
+    'show workflows',
+    'list workflows',
+    'my workflows',
+    'active workflows',
+    'scheduled workflows',
+    'show scheduled tasks',
+    'list scheduled tasks',
+  ];
+  if (listWorkflowTriggers.some((t) => lower === t || lower.startsWith(t))) {
+    return {
+      toolId: 'manage_workflow',
+      args: { action: 'list' },
+      confidence: 'high',
+    };
+  }
+
+  const manageWorkflowMatch = lower.match(
+    /^(run|execute|pause|resume|delete|cancel)\s+workflow\s+([a-zA-Z0-9_\-]+)/i,
+  );
+  if (manageWorkflowMatch) {
+    const actionVerb = manageWorkflowMatch[1].toLowerCase();
+    const action =
+      actionVerb === 'cancel'
+        ? 'delete'
+        : actionVerb === 'execute'
+          ? 'run'
+          : (actionVerb as 'run' | 'pause' | 'resume' | 'delete');
+    return {
+      toolId: 'manage_workflow',
+      args: { action, workflowId: manageWorkflowMatch[2].trim() },
+      confidence: 'high',
+    };
+  }
+
+  // Scheduled Delay (e.g. "in 10 minutes set volume to 20", "after 5 mins close spotify")
+  const delayMatch = lower.match(
+    /^(?:in|after)\s+(\d+)\s*(?:minutes|mins|minute|min)\s+(?:to\s+)?(.*)$/i,
+  );
+  if (delayMatch && delayMatch[1] && delayMatch[2]) {
+    const mins = parseInt(delayMatch[1], 10);
+    const targetActionStr = delayMatch[2].trim();
+    const subIntent = detectDirectIntent(targetActionStr);
+
+    if (subIntent && subIntent.toolId !== 'manage_workflow') {
+      return {
+        toolId: 'create_workflow',
+        args: {
+          name: `Timed Action (${mins}m): ${targetActionStr}`,
+          triggerType: 'delay',
+          delayMinutes: mins,
+          actionType: 'tool',
+          toolId: subIntent.toolId,
+          args: subIntent.args,
+        },
+        confidence: 'high',
+      };
+    } else {
+      return {
+        toolId: 'create_workflow',
+        args: {
+          name: `Scheduled Mission (${mins}m): ${targetActionStr}`,
+          triggerType: 'delay',
+          delayMinutes: mins,
+          actionType: 'mission',
+          prompt: targetActionStr,
+        },
+        confidence: 'high',
+      };
+    }
+  }
+
+  // Recurring Interval (e.g. "every 15 minutes check battery", "every 30 mins check system stats")
+  const intervalMatch = lower.match(
+    /^every\s+(\d+)\s*(?:minutes|mins|minute|min)\s+(?:to\s+)?(.*)$/i,
+  );
+  if (intervalMatch && intervalMatch[1] && intervalMatch[2]) {
+    const mins = parseInt(intervalMatch[1], 10);
+    const targetActionStr = intervalMatch[2].trim();
+    const subIntent = detectDirectIntent(targetActionStr);
+
+    return {
+      toolId: 'create_workflow',
+      args: {
+        name: `Recurring (${mins}m): ${targetActionStr}`,
+        triggerType: 'interval',
+        intervalMinutes: mins,
+        actionType: subIntent ? 'tool' : 'mission',
+        toolId: subIntent?.toolId,
+        args: subIntent?.args,
+        prompt: subIntent ? undefined : targetActionStr,
+      },
+      confidence: 'high',
+    };
+  }
+
+  // Battery Threshold Condition (e.g. "if battery drops below 20% alert me")
+  const conditionMatch = lower.match(
+    /if\s+battery\s+(?:drops below|falls below|is below|less than|<)\s*(\d+)%?/i,
+  );
+  if (conditionMatch && conditionMatch[1]) {
+    const threshold = parseInt(conditionMatch[1], 10);
+    return {
+      toolId: 'create_workflow',
+      args: {
+        name: `Battery Sentinel (${threshold}%)`,
+        triggerType: 'condition',
+        metric: 'battery',
+        operator: '<',
+        threshold,
+        actionType: 'speech',
+        speechText: `System Alert: Battery level has dropped below ${threshold}%. Please connect to AC power immediately.`,
+      },
       confidence: 'high',
     };
   }
@@ -489,21 +626,29 @@ export function parseModelDirectives(rawText: string): ParsedDirectiveResult {
   }
 
   const actions: DetectedAction[] = [];
-  const actionRegex = /\[ACTION:\s*([a-zA-Z0-9_]+)\s*(\{[\s\S]*?\})\]/g;
+  const actionRegex = /\[ACTION:\s*([a-zA-Z0-9_]+)(?:\s*(\{[\s\S]*?\}))?\]/gi;
 
   const cleanedText = rawText
     .replace(actionRegex, (_match, toolId, rawJson) => {
+      if (!rawJson || !rawJson.trim()) {
+        actions.push({
+          toolId: toolId.trim().toLowerCase(),
+          args: {},
+          confidence: 'model',
+        });
+        return '';
+      }
       try {
         const args = JSON.parse(rawJson);
         actions.push({
-          toolId: toolId.trim(),
+          toolId: toolId.trim().toLowerCase(),
           args: typeof args === 'object' && args !== null ? args : {},
           confidence: 'model',
         });
         return '';
       } catch {
         actions.push({
-          toolId: toolId.trim(),
+          toolId: toolId.trim().toLowerCase(),
           args: {},
           confidence: 'model',
         });

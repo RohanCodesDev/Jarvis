@@ -180,6 +180,51 @@ const desktopAPI: DesktopBridgeAPI = {
   captureScreenAndAnalyze: async (prompt) => {
     return ipcRenderer.invoke('desktop:captureScreenAndAnalyze', prompt);
   },
+  onTriggerVoiceInput: (callback) => {
+    const handler = () => callback();
+    ipcRenderer.on('desktop:triggerVoiceInput', handler);
+    return () => {
+      ipcRenderer.removeListener('desktop:triggerVoiceInput', handler);
+    };
+  },
+  createWorkflow: async (params) => {
+    return ipcRenderer.invoke('desktop:createWorkflow', params);
+  },
+  getWorkflows: async () => {
+    return ipcRenderer.invoke('desktop:getWorkflows');
+  },
+  toggleWorkflow: async (id) => {
+    return ipcRenderer.invoke('desktop:toggleWorkflow', id);
+  },
+  deleteWorkflow: async (id) => {
+    return ipcRenderer.invoke('desktop:deleteWorkflow', id);
+  },
+  executeWorkflowNow: async (id) => {
+    return ipcRenderer.invoke('desktop:executeWorkflowNow', id);
+  },
+  onWorkflowTriggered: (callback) => {
+    const handler = (
+      _event: Electron.IpcRendererEvent,
+      data: {
+        workflow: import('./services/automation/workflowTypes').WorkflowItem;
+        result: { success: boolean; message: string };
+      },
+    ) => callback(data);
+    ipcRenderer.on('desktop:workflowTriggered', handler);
+    return () => {
+      ipcRenderer.removeListener('desktop:workflowTriggered', handler);
+    };
+  },
+  onWorkflowUpdated: (callback) => {
+    const handler = (
+      _event: Electron.IpcRendererEvent,
+      workflow: import('./services/automation/workflowTypes').WorkflowItem,
+    ) => callback(workflow);
+    ipcRenderer.on('desktop:workflowUpdated', handler);
+    return () => {
+      ipcRenderer.removeListener('desktop:workflowUpdated', handler);
+    };
+  },
 };
 
 contextBridge.exposeInMainWorld('jarvisDesktop', desktopAPI);

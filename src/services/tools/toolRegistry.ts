@@ -311,6 +311,158 @@ export class ToolRegistry {
         };
       },
     });
+
+    this.registerTool({
+      id: 'create_workflow',
+      name: 'Create Autonomous Workflow',
+      description:
+        'Schedules an autonomous workflow or system automation with time delay, recurring interval, daily schedule, or condition triggers.',
+      permission: 'low_risk',
+      schema: z.object({
+        name: z.string().min(1, 'Workflow name is required'),
+        triggerType: z
+          .enum(['delay', 'interval', 'daily_time', 'condition'])
+          .default('delay'),
+        delayMinutes: z.number().optional(),
+        intervalMinutes: z.number().optional(),
+        targetTime: z.string().optional(),
+        actionType: z.enum(['tool', 'mission', 'speech']).default('tool'),
+        toolId: z.string().optional(),
+        args: z.record(z.string(), z.unknown()).optional(),
+        prompt: z.string().optional(),
+        speechText: z.string().optional(),
+        metric: z.enum(['battery', 'cpu', 'ram']).optional(),
+        operator: z.enum(['<', '>', '<=', '>=']).optional(),
+        threshold: z.number().optional(),
+      }),
+      execute: async (args: {
+        name: string;
+        triggerType?: 'delay' | 'interval' | 'daily_time' | 'condition';
+        delayMinutes?: number;
+        intervalMinutes?: number;
+        targetTime?: string;
+        actionType?: 'tool' | 'mission' | 'speech';
+        toolId?: string;
+        args?: Record<string, unknown>;
+        prompt?: string;
+        speechText?: string;
+        metric?: 'battery' | 'cpu' | 'ram';
+        operator?: '<' | '>' | '<=' | '>=';
+        threshold?: number;
+      }) => {
+        const { globalWorkflowEngine } = await import(
+          '../automation/workflowEngine'
+        );
+        const triggerType = args.triggerType || 'delay';
+        const item = await globalWorkflowEngine.createWorkflow({
+          name: args.name,
+          triggerType,
+          triggerConfig: {
+            delayMinutes: args.delayMinutes,
+            intervalMinutes: args.intervalMinutes,
+            targetTime: args.targetTime,
+            condition:
+              args.metric && args.operator && typeof args.threshold === 'number'
+                ? {
+                    metric: args.metric,
+                    operator: args.operator,
+                    value: args.threshold,
+                  }
+                : undefined,
+          },
+          actionType: args.actionType || 'tool',
+          actionPayload: {
+            toolId: args.toolId,
+            args: args.args,
+            prompt: args.prompt,
+            speechText: args.speechText,
+          },
+        });
+
+        return {
+          success: true,
+          message: `Autonomous workflow "${item.name}" registered and armed, sir. Next execution: ${new Date(item.nextRunMs).toLocaleTimeString()}.`,
+          data: item,
+        };
+      },
+    });
+
+    this.registerTool({
+      id: 'manage_workflow',
+      name: 'Manage Autonomous Workflows',
+      description:
+        'Lists, executes, pauses, resumes, or removes autonomous workflows and system automations.',
+      permission: 'low_risk',
+      schema: z.object({
+        action: z.enum(['list', 'run', 'pause', 'resume', 'delete']),
+        workflowId: z.string().optional(),
+      }),
+      execute: async (args: {
+        action: 'list' | 'run' | 'pause' | 'resume' | 'delete';
+        workflowId?: string;
+      }) => {
+        const { globalWorkflowEngine } = await import(
+          '../automation/workflowEngine'
+        );
+
+        if (args.action === 'list') {
+          const list = globalWorkflowEngine.getWorkflows();
+          return {
+            success: true,
+            message: `Found ${list.length} registered workflow protocols.`,
+            data: list,
+          };
+        }
+
+        if (!args.workflowId) {
+          return {
+            success: false,
+            message: 'A workflowId is required for this action.',
+            error: 'Missing workflowId',
+          };
+        }
+
+        if (args.action === 'run') {
+          const res = await globalWorkflowEngine.executeWorkflowNow(
+            args.workflowId,
+          );
+          return {
+            success: res.success,
+            message: `Workflow manual execution: ${res.message}`,
+            data: res,
+          };
+        }
+
+        if (args.action === 'pause' || args.action === 'resume') {
+          const wf = await globalWorkflowEngine.toggleWorkflow(args.workflowId);
+          if (!wf) {
+            return {
+              success: false,
+              message: `Workflow "${args.workflowId}" not found.`,
+            };
+          }
+          return {
+            success: true,
+            message: `Workflow "${wf.name}" is now ${wf.status}, sir.`,
+            data: wf,
+          };
+        }
+
+        if (args.action === 'delete') {
+          const deleted = await globalWorkflowEngine.deleteWorkflow(
+            args.workflowId,
+          );
+          return {
+            success: deleted,
+            message: deleted
+              ? `Workflow protocol "${args.workflowId}" decommissioned.`
+              : `Workflow "${args.workflowId}" not found.`,
+          };
+        }
+
+        return { success: false, message: 'Invalid action requested.' };
+      },
+    });
   }
 
   public registerTool<T>(tool: ToolDefinition<T>): void {

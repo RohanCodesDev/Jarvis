@@ -3,6 +3,7 @@ import { getDbUri } from '../secretStore';
 import type { ChatMessage, UserMemoryItem } from '../../types/hud';
 import type { ExecutionPlan } from '../agent/agentTypes';
 import type { ReminderItem } from '../scheduler/reminderTypes';
+import type { WorkflowItem } from '../automation/workflowTypes';
 
 export class DatabaseService {
   private pool: Pool | null = null;
@@ -12,6 +13,7 @@ export class DatabaseService {
   private messageCache: ChatMessage[] = [];
   private taskPlansCache: Map<string, ExecutionPlan> = new Map();
   private remindersCache: Map<string, ReminderItem> = new Map();
+  private workflowsCache: Map<string, WorkflowItem> = new Map();
   private isInitialized = false;
 
   constructor(customPool?: Pool) {
@@ -116,6 +118,25 @@ export class DatabaseService {
             due_timestamp BIGINT NOT NULL,
             due_date_str VARCHAR(32) NOT NULL,
             status VARCHAR(16) NOT NULL DEFAULT 'pending',
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+          );
+        `);
+
+        await client.query(`
+          CREATE TABLE IF NOT EXISTS workflows (
+            id VARCHAR(64) PRIMARY KEY,
+            name VARCHAR(128) NOT NULL,
+            description TEXT,
+            trigger_type VARCHAR(32) NOT NULL,
+            trigger_config JSONB NOT NULL,
+            action_type VARCHAR(32) NOT NULL,
+            action_payload JSONB NOT NULL,
+            status VARCHAR(16) NOT NULL DEFAULT 'active',
+            next_run_ms BIGINT NOT NULL,
+            last_run_ms BIGINT,
+            execution_count INT NOT NULL DEFAULT 0,
+            max_executions INT,
+            last_result JSONB,
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
           );
         `);
@@ -608,6 +629,136 @@ export class DatabaseService {
     }
 
     return Array.from(this.remindersCache.values()).slice(0, limit);
+  }
+
+  public async saveWorkflow(
+    workflow: WorkflowItem,
+  ): Promise<{ success: boolean }> {
+    this.workflowsCache.set(workflow.id, workflow);
+
+    if (this.isConnected && this.pool) {
+      try {
+        await this.pool.query(
+          `INSERT INTO workflows (
+            id, name, description, trigger_type, trigger_config, action_type,
+            action_payload, status, next_run_ms, last_run_ms, execution_count,
+            max_executions, last_result, created_at
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+          ON CONFLICT (id) DO UPDATE SET
+            name = EXCLUDED.name,
+            description = EXCLUDED.description,
+            trigger_type = EXCLUDED.trigger_type,
+            trigger_config = EXCLUDED.trigger_config,
+            action_type = EXCLUDED.action_type,
+            action_payload = EXCLUDED.action_payload,
+            status = EXCLUDED.status,
+            next_run_ms = EXCLUDED.next_run_ms,
+            last_run_ms = EXCLUDED.last_run_ms,
+            execution_count = EXCLUDED.execution_count,
+            max_executions = EXCLUDED.max_executions,
+            last_result = EXCLUDED.last_result;`,
+          [
+            workflow.id,
+            workflow.name,
+            workflow.description ?? null,
+            workflow.triggerType,
+            JSON.stringify(workflow.triggerConfig),
+            workflow.actionType,
+            JSON.stringify(workflow.actionPayload),
+            workflow.status,
+            workflow.nextRunMs,
+            workflow.lastRunMs ?? null,
+            workflow.executionCount,
+            workflow.maxExecutions ?? null,
+            workflow.lastResult ? JSON.stringify(workflow.lastResult) : null,
+            workflow.createdAt,
+          ],
+        );
+      } catch (err) {
+        console.warn(
+          '[DatabaseService] Failed to persist workflow to Neon DB:',
+          err,
+        );
+      }
+    }
+
+    return { success: true };
+  }
+
+  public async getWorkflows(): Promise<WorkflowItem[]> {
+    if (!this.isConnected) {
+      await this.initialize().catch(() => {});
+    }
+
+    if (this.isConnected && this.pool) {
+      try {
+        const res = await this.pool.query(
+          `SELECT id, name, description, trigger_type, trigger_config, action_type,
+                  action_payload, status, next_run_ms, last_run_ms, execution_count,
+                  max_executions, last_result, created_at
+           FROM workflows
+           ORDER BY created_at DESC;`,
+        );
+
+        if (res.rows.length > 0) {
+          const loaded: WorkflowItem[] = res.rows.map((r) => ({
+            id: r.id,
+            name: r.name,
+            description: r.description || undefined,
+            triggerType: r.trigger_type,
+            triggerConfig:
+              typeof r.trigger_config === 'string'
+                ? JSON.parse(r.trigger_config)
+                : r.trigger_config,
+            actionType: r.action_type,
+            actionPayload:
+              typeof r.action_payload === 'string'
+                ? JSON.parse(r.action_payload)
+                : r.action_payload,
+            status: r.status,
+            nextRunMs: Number(r.next_run_ms),
+            lastRunMs: r.last_run_ms ? Number(r.last_run_ms) : undefined,
+            executionCount: Number(r.execution_count),
+            maxExecutions: r.max_executions
+              ? Number(r.max_executions)
+              : undefined,
+            lastResult:
+              typeof r.last_result === 'string'
+                ? JSON.parse(r.last_result)
+                : (r.last_result ?? undefined),
+            createdAt: new Date(r.created_at).toISOString(),
+          }));
+          for (const item of loaded) {
+            this.workflowsCache.set(item.id, item);
+          }
+          return loaded;
+        }
+      } catch (err) {
+        console.warn(
+          '[DatabaseService] Failed to query workflows from Neon DB:',
+          err,
+        );
+      }
+    }
+
+    return Array.from(this.workflowsCache.values());
+  }
+
+  public async deleteWorkflow(id: string): Promise<boolean> {
+    const existed = this.workflowsCache.delete(id);
+
+    if (this.isConnected && this.pool) {
+      try {
+        await this.pool.query(`DELETE FROM workflows WHERE id = $1;`, [id]);
+      } catch (err) {
+        console.warn(
+          '[DatabaseService] Failed to delete workflow from Neon DB:',
+          err,
+        );
+      }
+    }
+
+    return existed;
   }
 }
 

@@ -167,15 +167,24 @@ export const JarvisHUD: React.FC = () => {
         .getSettings()
         .then((loadedSettings) => {
           setSettings(loadedSettings);
+          const isConnected =
+            (loadedSettings.cloudProvider === 'groq' && loadedSettings.hasGroqKey) ||
+            (loadedSettings.cloudProvider === 'openrouter' && loadedSettings.hasApiKey) ||
+            loadedSettings.cloudProvider === 'ollama';
+
+          const activeModelName =
+            loadedSettings.cloudProvider === 'openrouter'
+              ? loadedSettings.openRouterModel
+              : loadedSettings.cloudProvider === 'groq'
+                ? loadedSettings.groqModel || 'openai/gpt-oss-120b'
+                : loadedSettings.ollamaModel;
+
           setTelemetry((prev) => ({
             ...prev,
-            activeModel:
-              loadedSettings.cloudProvider === 'openrouter'
-                ? loadedSettings.openRouterModel
-                : loadedSettings.ollamaModel,
-            connectionStatus: loadedSettings.hasApiKey ? 'connected' : 'mock',
+            activeModel: activeModelName,
+            connectionStatus: isConnected ? 'connected' : 'mock',
           }));
-          if (loadedSettings.hasApiKey) {
+          if (loadedSettings.hasApiKey || loadedSettings.hasGroqKey) {
             addActivity(
               'success',
               'security',
@@ -336,6 +345,18 @@ export const JarvisHUD: React.FC = () => {
     settings.voiceGender,
     telemetry.speakerEnabled,
   ]);
+
+  // Global Push-To-Talk Hotkey Listener (Ctrl+Shift+Space)
+  useEffect(() => {
+    if (window.jarvisDesktop?.onTriggerVoiceInput) {
+      const unsub = window.jarvisDesktop.onTriggerVoiceInput(() => {
+        handleVoiceInputTriggerRef.current();
+      });
+      return () => {
+        unsub();
+      };
+    }
+  }, []);
 
   // Subtle telemetry pulse
   useEffect(() => {
@@ -507,7 +528,9 @@ export const JarvisHUD: React.FC = () => {
       const modelToSend =
         settings.cloudProvider === 'groq'
           ? settings.groqModel || undefined
-          : settings.openRouterModel;
+          : settings.cloudProvider === 'ollama'
+            ? settings.ollamaModel || undefined
+            : settings.openRouterModel;
 
       let speechHandle: StreamingSpeechHandle | null = null;
       if (telemetry.speakerEnabled && settings.speechEnabled) {
@@ -560,7 +583,7 @@ export const JarvisHUD: React.FC = () => {
           if (event.done) {
             streamCleanupRef.current = null;
             const elapsed = Math.round(performance.now() - startTime);
-            const finalText = event.fullResponse || accumulated;
+            let finalText = event.fullResponse || accumulated;
 
             if (event.error) {
               if (speechHandle) {
@@ -583,6 +606,10 @@ export const JarvisHUD: React.FC = () => {
               addActivity('error', 'ai', event.error);
               setTimeout(() => setAssistantState('idle'), 3500);
             } else {
+              if (!finalText.trim()) {
+                finalText =
+                  'Directive acknowledged, sir. All subsystem parameters nominal.';
+              }
               setMessages((prev) =>
                 prev.map((m) =>
                   m.id === jarvisMsgId
@@ -601,6 +628,9 @@ export const JarvisHUD: React.FC = () => {
               );
               addActivity('success', 'ai', `Stream concluded (${elapsed}ms).`);
               if (speechHandle) {
+                if (!accumulated && finalText) {
+                  speechHandle.feedChunk(finalText);
+                }
                 speechHandle.finish();
               } else {
                 setAssistantState('idle');
@@ -652,7 +682,7 @@ export const JarvisHUD: React.FC = () => {
           const dUrl = (capResult.data as Record<string, unknown>)?.dataUrl as
             | string
             | undefined;
-          if (dUrl) {
+          if (dUrl && dUrl.length > 100) {
             capturedDataUrl = dUrl;
             setTacticalCard({
               id: 'tactical-vision-' + Date.now(),
@@ -818,13 +848,22 @@ export const JarvisHUD: React.FC = () => {
 
   const handleSaveSettings = (newSettings: JarvisSettings) => {
     setSettings(newSettings);
+    const isConnected =
+      (newSettings.cloudProvider === 'groq' && newSettings.hasGroqKey) ||
+      (newSettings.cloudProvider === 'openrouter' && newSettings.hasApiKey) ||
+      newSettings.cloudProvider === 'ollama';
+
+    const activeModelName =
+      newSettings.cloudProvider === 'openrouter'
+        ? newSettings.openRouterModel
+        : newSettings.cloudProvider === 'groq'
+          ? newSettings.groqModel || 'openai/gpt-oss-120b'
+          : newSettings.ollamaModel;
+
     setTelemetry((prev) => ({
       ...prev,
-      activeModel:
-        newSettings.cloudProvider === 'openrouter'
-          ? newSettings.openRouterModel
-          : newSettings.ollamaModel,
-      connectionStatus: newSettings.hasApiKey ? 'connected' : 'mock',
+      activeModel: activeModelName,
+      connectionStatus: isConnected ? 'connected' : 'mock',
     }));
     if (window.jarvisDesktop?.saveSettings) {
       window.jarvisDesktop.saveSettings(newSettings).catch(() => {});

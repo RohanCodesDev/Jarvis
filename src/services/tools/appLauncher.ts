@@ -18,7 +18,7 @@ export const APPROVED_APPS: ApprovedApp[] = [
   {
     id: 'spotify',
     displayName: 'Spotify',
-    aliases: ['spotify', 'music', 'spotify music'],
+    aliases: ['spotify', 'music', 'spotify music', 'songs'],
     command: 'spotify:',
     isUri: true,
   },
@@ -55,7 +55,7 @@ export const APPROVED_APPS: ApprovedApp[] = [
   {
     id: 'terminal',
     displayName: 'Windows Terminal',
-    aliases: ['terminal', 'wt', 'windows terminal'],
+    aliases: ['terminal', 'wt', 'windows terminal', 'term', 'console'],
     command: 'wt',
   },
   {
@@ -67,7 +67,7 @@ export const APPROVED_APPS: ApprovedApp[] = [
   {
     id: 'explorer',
     displayName: 'File Explorer',
-    aliases: ['explorer', 'files', 'file explorer', 'my pc'],
+    aliases: ['explorer', 'files', 'file explorer', 'my pc', 'folder', 'folders'],
     command: 'explorer',
   },
   {

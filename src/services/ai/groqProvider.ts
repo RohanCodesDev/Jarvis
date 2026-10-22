@@ -168,7 +168,7 @@ export class GroqProvider implements AIProvider {
     }
 
     let model = options.model?.trim();
-    if (!model || model.includes('/')) {
+    if (!model) {
       const settings = loadSettings();
       model = settings.groqModel || 'openai/gpt-oss-120b';
     }
@@ -294,6 +294,7 @@ export class GroqProvider implements AIProvider {
     const decoder = new TextDecoder('utf-8');
     let buffer = '';
     let fullResponse = '';
+    let fullReasoning = '';
 
     try {
       while (true) {
@@ -312,10 +313,28 @@ export class GroqProvider implements AIProvider {
 
         for (const line of lines) {
           const trimmed = line.trim();
-          if (!trimmed || !trimmed.startsWith('data:')) continue;
+          if (!trimmed) continue;
+
+          if (trimmed.startsWith('{') && trimmed.includes('"error"')) {
+            try {
+              const errPayload = JSON.parse(trimmed) as {
+                error?: { message?: string };
+              };
+              if (errPayload.error?.message) {
+                callbacks.onError(`Groq provider error: ${errPayload.error.message}`);
+                return;
+              }
+            } catch {}
+          }
+
+          if (!trimmed.startsWith('data:')) continue;
 
           const dataStr = trimmed.slice(5).trim();
           if (dataStr === '[DONE]') {
+            if (!fullResponse.trim() && fullReasoning.trim()) {
+              fullResponse = fullReasoning.trim();
+              callbacks.onChunk(fullResponse);
+            }
             callbacks.onDone(fullResponse, { model });
             return;
           }
@@ -323,19 +342,35 @@ export class GroqProvider implements AIProvider {
           try {
             const parsed = JSON.parse(dataStr) as {
               choices?: Array<{
-                delta?: { content?: string };
+                delta?: { content?: string; reasoning?: string; reasoning_content?: string };
               }>;
+              error?: { message?: string; code?: number };
             };
 
-            const deltaContent = parsed.choices?.[0]?.delta?.content;
+            if (parsed.error) {
+              const errMsg = parsed.error.message || JSON.stringify(parsed.error);
+              callbacks.onError(`Groq error: ${errMsg}`);
+              return;
+            }
+
+            const delta = parsed.choices?.[0]?.delta;
+            const deltaContent = delta?.content;
+            const deltaReasoning = delta?.reasoning || delta?.reasoning_content;
+
             if (deltaContent) {
               fullResponse += deltaContent;
               callbacks.onChunk(deltaContent);
+            } else if (deltaReasoning) {
+              fullReasoning += deltaReasoning;
             }
           } catch {}
         }
       }
 
+      if (!fullResponse.trim() && fullReasoning.trim()) {
+        fullResponse = fullReasoning.trim();
+        callbacks.onChunk(fullResponse);
+      }
       callbacks.onDone(fullResponse, { model });
     } catch (err: unknown) {
       if (options.signal?.aborted) {

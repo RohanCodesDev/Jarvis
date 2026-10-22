@@ -64,6 +64,8 @@ import { globalTaskPlanner } from './services/agent/taskPlanner';
 import { globalTaskExecutor } from './services/agent/taskExecutor';
 import type { ExecutionPlan } from './services/agent/agentTypes';
 import { globalReminderService } from './services/scheduler/reminderService';
+import { getTopWindowTitles } from './services/tools/screenCaptureTool';
+import { globalWorkflowEngine } from './services/automation/workflowEngine';
 
 function setupIpcHandlers() {
   ipcMain.handle('desktop:getSystemInfo', async (event) => {
@@ -236,6 +238,77 @@ function setupIpcHandlers() {
     },
   );
 
+  async function streamVisionAnalysis(
+    streamId: string,
+    event: IpcMainInvokeEvent,
+    messages: Array<{
+      role: 'user' | 'assistant' | 'system';
+      content: string;
+      imageUrl?: string;
+    }>,
+    model: string | undefined,
+    capturedUrl: string,
+  ) {
+    const visionMessages = [...messages];
+    const lastUserIdx = visionMessages.findLastIndex((m) => m.role === 'user');
+    if (lastUserIdx >= 0) {
+      visionMessages[lastUserIdx] = {
+        ...visionMessages[lastUserIdx],
+        imageUrl: capturedUrl,
+      } as (typeof visionMessages)[0] & { imageUrl: string };
+    }
+    await aiManager.streamChat(
+      streamId + '-vision',
+      {
+        messages: visionMessages,
+        model,
+        screenCaptureDataUrl: capturedUrl,
+      },
+      (chunk) => {
+        if (!event.sender.isDestroyed()) {
+          event.sender.send('desktop:chatChunk', {
+            streamId,
+            chunk,
+            done: false,
+          });
+        }
+      },
+      async (visionResponse, visionMeta) => {
+        const text =
+          visionResponse.trim() || 'Visual analysis complete, sir.';
+        if (!event.sender.isDestroyed()) {
+          event.sender.send('desktop:chatChunk', {
+            streamId,
+            fullResponse: text,
+            done: true,
+            metadata: visionMeta,
+          });
+        }
+        databaseService
+          .saveChatMessage({
+            id: 'msg-j-' + Date.now(),
+            sender: 'jarvis',
+            text,
+            timestamp: new Date().toLocaleTimeString('en-US', {
+              hour12: false,
+            }),
+            status: 'delivered',
+            metadata: { modelUsed: visionMeta?.model },
+          })
+          .catch(() => {});
+      },
+      (visionErr) => {
+        if (!event.sender.isDestroyed()) {
+          event.sender.send('desktop:chatChunk', {
+            streamId,
+            error: visionErr,
+            done: true,
+          });
+        }
+      },
+    );
+  }
+
   ipcMain.handle('desktop:sendChatMessage', async (event, payload: unknown) => {
     if (!isValidSender(event)) {
       throw new Error('Unauthorized IPC sender');
@@ -258,15 +331,40 @@ function setupIpcHandlers() {
       throw new Error('streamId and message are required');
     }
 
-    const messages = (data.history || []).map((m) => ({
+    // Sliding-window cap to most recent 16 turns to optimize memory and context tokens
+    const rawHistory = (data.history || []).slice(-16);
+    const messages = rawHistory.map((m) => ({
       role: m.role,
       content: m.content,
     }));
     messages.push({ role: 'user' as const, content: data.message });
 
+    // Stage 6: Direct Multi-Step Plan Detection & Sequential Execution
+    const multiPlan = globalTaskPlanner.createPlanFromPrompt(data.message);
+    const directAction = !multiPlan ? detectDirectIntent(data.message) : null;
+
     let searchContext: string | undefined;
+
+    // Inject active desktop window context if available
+    try {
+      const topWindows = await getTopWindowTitles();
+      if (topWindows.length > 0) {
+        const activeWinHeader = `[ACTIVE DESKTOP CONTEXT: Foreground application "${topWindows[0]}". Other open windows: ${topWindows.slice(1, 4).join(', ')}]`;
+        searchContext = searchContext
+          ? `${activeWinHeader}\n\n${searchContext}`
+          : activeWinHeader;
+      }
+    } catch {}
+
     const settings = loadSettings();
-    if (settings.webSearchEnabled !== false && shouldSearchWeb(data.message)) {
+
+    // Only query external web search if NOT an automated local action or multi-step plan
+    if (
+      settings.webSearchEnabled !== false &&
+      !directAction &&
+      !multiPlan &&
+      shouldSearchWeb(data.message)
+    ) {
       try {
         const searchResults = await searchWeb(data.message);
         if (searchResults.length > 0) {
@@ -303,10 +401,7 @@ function setupIpcHandlers() {
       console.warn('[Main] Failed to load memory context:', memErr);
     }
 
-    // Stage 6: Direct Multi-Step Plan Detection & Sequential Execution
-    const multiPlan = globalTaskPlanner.createPlanFromPrompt(data.message);
     let directActionResultMessage: string | undefined;
-
     let screenCaptureDataUrl: string | undefined = data.screenCaptureDataUrl;
 
     if (multiPlan && multiPlan.steps.length >= 2) {
@@ -339,42 +434,39 @@ function setupIpcHandlers() {
       } catch (planErr) {
         console.warn('[Main] Multi-step plan execution error:', planErr);
       }
-    } else {
+    } else if (directAction) {
       // Direct Single-Action Intent Detection & Execution
-      const directAction = detectDirectIntent(data.message);
-      if (directAction) {
-        try {
-          const actionResult = await globalToolRegistry.executeTool(
-            directAction.toolId,
-            directAction.args,
-          );
-          if (
-            directAction.toolId === 'analyze_screen' &&
-            actionResult.success &&
-            (actionResult.data as Record<string, unknown>)?.dataUrl
-          ) {
-            screenCaptureDataUrl = (
-              actionResult.data as Record<string, unknown>
-            ).dataUrl as string;
-          }
-          directActionResultMessage = `[SYSTEM TOOL RESULT: Tool "${directAction.toolId}" executed. Result: "${actionResult.message}"]`;
-          if (!event.sender.isDestroyed()) {
-            event.sender.send('desktop:activityEvent', {
-              id: 'act-' + Date.now(),
-              timestamp: new Date().toLocaleTimeString('en-US', {
-                hour12: false,
-              }),
-              level: actionResult.success ? 'success' : 'warn',
-              category: 'tool',
-              message: actionResult.message,
-              durationMs: actionResult.durationMs,
-              imageUrl: (actionResult.data as Record<string, unknown>)
-                ?.dataUrl as string | undefined,
-            });
-          }
-        } catch (toolErr) {
-          console.warn('[Main] Direct action execution error:', toolErr);
+      try {
+        const actionResult = await globalToolRegistry.executeTool(
+          directAction.toolId,
+          directAction.args,
+        );
+        if (
+          directAction.toolId === 'analyze_screen' &&
+          actionResult.success &&
+          (actionResult.data as Record<string, unknown>)?.dataUrl
+        ) {
+          screenCaptureDataUrl = (
+            actionResult.data as Record<string, unknown>
+          ).dataUrl as string;
         }
+        directActionResultMessage = `[SYSTEM TOOL RESULT: Tool "${directAction.toolId}" executed. Result: "${actionResult.message}"]`;
+        if (!event.sender.isDestroyed()) {
+          event.sender.send('desktop:activityEvent', {
+            id: 'act-' + Date.now(),
+            timestamp: new Date().toLocaleTimeString('en-US', {
+              hour12: false,
+            }),
+            level: actionResult.success ? 'success' : 'warn',
+            category: 'tool',
+            message: actionResult.message,
+            durationMs: actionResult.durationMs,
+            imageUrl: (actionResult.data as Record<string, unknown>)
+              ?.dataUrl as string | undefined,
+          });
+        }
+      } catch (toolErr) {
+        console.warn('[Main] Direct action execution error:', toolErr);
       }
     }
 
@@ -420,7 +512,51 @@ function setupIpcHandlers() {
           fullResponse,
           data.message,
         );
-        if (modelPlan && modelPlan.steps.length >= 2) {
+
+        // VISION UPGRADE: intercept single-step capture_screen PLAN and route to analyze_screen
+        if (
+          modelPlan &&
+          modelPlan.steps.length === 1 &&
+          (modelPlan.steps[0].toolId === 'capture_screen' ||
+            modelPlan.steps[0].toolId === 'analyze_screen')
+        ) {
+          try {
+            finalResponseText = fullResponse
+              .replace(/\[PLAN:\s*\[[\s\S]*?\]\s*\]/i, '')
+              .replace(/\[PLAN:\s*[\s\S]+?\]/i, '')
+              .trim();
+            const capResult = await globalToolRegistry.executeTool(
+              'analyze_screen',
+              { query: data.message },
+            );
+            const capturedUrl = (
+              capResult.data as Record<string, unknown>
+            )?.dataUrl as string | undefined;
+            if (capturedUrl && capturedUrl.length > 100) {
+              if (!event.sender.isDestroyed()) {
+                event.sender.send('desktop:activityEvent', {
+                  id: 'act-' + Date.now(),
+                  timestamp: new Date().toLocaleTimeString('en-US', { hour12: false }),
+                  level: 'info',
+                  category: 'tool',
+                  message: capResult.message,
+                  durationMs: capResult.durationMs,
+                  imageUrl: capturedUrl,
+                });
+              }
+              await streamVisionAnalysis(
+                data.streamId,
+                event,
+                messages,
+                data.model,
+                capturedUrl,
+              );
+              return; // vision stream handled completion
+            }
+          } catch (visionErr) {
+            console.warn('[Main] Vision PLAN upgrade error:', visionErr);
+          }
+        } else if (modelPlan && modelPlan.steps.length >= 2) {
           try {
             finalResponseText = fullResponse
               .replace(/\[PLAN:\s*\[[\s\S]*?\]\s*\]/i, '')
@@ -461,6 +597,25 @@ function setupIpcHandlers() {
                     durationMs: res.durationMs,
                     imageUrl: (res.data as any)?.dataUrl,
                   });
+                }
+                // When an action directs a visual capture or inspection, stream the visual analysis
+                if (
+                  (action.toolId === 'analyze_screen' ||
+                    action.toolId === 'capture_screen') &&
+                  res.success &&
+                  (res.data as Record<string, unknown>)?.dataUrl
+                ) {
+                  const capturedUrl = (
+                    res.data as Record<string, unknown>
+                  ).dataUrl as string;
+                  await streamVisionAnalysis(
+                    data.streamId,
+                    event,
+                    messages,
+                    data.model,
+                    capturedUrl,
+                  );
+                  return; // vision stream handled completion
                 }
               } catch (actErr) {
                 console.warn('[Main] Directive execution error:', actErr);
@@ -706,6 +861,36 @@ function setupIpcHandlers() {
     return aiManager.validateOllama();
   });
 
+  // Autonomous Workflows & System Automation
+  ipcMain.handle('desktop:createWorkflow', async (event, params: unknown) => {
+    if (!isValidSender(event)) throw new Error('Unauthorized IPC sender');
+    return globalWorkflowEngine.createWorkflow(params as any);
+  });
+
+  ipcMain.handle('desktop:getWorkflows', async (event) => {
+    if (!isValidSender(event)) throw new Error('Unauthorized IPC sender');
+    return globalWorkflowEngine.getWorkflows();
+  });
+
+  ipcMain.handle('desktop:toggleWorkflow', async (event, id: unknown) => {
+    if (!isValidSender(event)) throw new Error('Unauthorized IPC sender');
+    if (typeof id !== 'string') return null;
+    return globalWorkflowEngine.toggleWorkflow(id);
+  });
+
+  ipcMain.handle('desktop:deleteWorkflow', async (event, id: unknown) => {
+    if (!isValidSender(event)) throw new Error('Unauthorized IPC sender');
+    if (typeof id !== 'string') return { success: false };
+    const success = await globalWorkflowEngine.deleteWorkflow(id);
+    return { success };
+  });
+
+  ipcMain.handle('desktop:executeWorkflowNow', async (event, id: unknown) => {
+    if (!isValidSender(event)) throw new Error('Unauthorized IPC sender');
+    if (typeof id !== 'string') return { success: false, message: 'Invalid ID' };
+    return globalWorkflowEngine.executeWorkflowNow(id);
+  });
+
   // Multimodal Screen Vision & Visual Diagnostics
   ipcMain.handle(
     'desktop:captureScreenAndAnalyze',
@@ -801,6 +986,16 @@ app.whenReady().then(() => {
         mainWindow.focus();
       }
     });
+
+    // Global Push-To-Talk Hotkey (Ctrl+Shift+Space)
+    globalShortcut.register('CommandOrControl+Shift+Space', () => {
+      if (!mainWindow) return;
+      if (!mainWindow.isVisible()) {
+        mainWindow.show();
+      }
+      mainWindow.focus();
+      mainWindow.webContents.send('desktop:triggerVoiceInput');
+    });
   } catch (shErr) {
     console.warn('[Main] Global shortcut registration failed:', shErr);
   }
@@ -892,8 +1087,41 @@ app.whenReady().then(() => {
     }
   });
 
-  // Sync saved reminders from Neon PostgreSQL
+  // Autonomous Workflows & System Automation Trigger Handlers
+  globalWorkflowEngine.onWorkflowTrigger((workflow, result) => {
+    try {
+      if (Notification.isSupported()) {
+        new Notification({
+          title: `Protocol Executed: ${workflow.name}`,
+          body: result.message,
+        }).show();
+      }
+    } catch {}
+
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('desktop:workflowTriggered', {
+        workflow,
+        result,
+      });
+      mainWindow.webContents.send('desktop:activityEvent', {
+        id: 'act-' + Date.now(),
+        timestamp: new Date().toLocaleTimeString('en-US', { hour12: false }),
+        level: result.success ? 'info' : 'warn',
+        category: 'system',
+        message: `Workflow [${workflow.name}]: ${result.message}`,
+      });
+    }
+  });
+
+  globalWorkflowEngine.onWorkflowUpdated((workflow) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('desktop:workflowUpdated', workflow);
+    }
+  });
+
+  // Sync saved reminders and workflows from Neon PostgreSQL
   globalReminderService.syncFromDatabase().catch(() => {});
+  globalWorkflowEngine.syncFromDatabase().catch(() => {});
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
