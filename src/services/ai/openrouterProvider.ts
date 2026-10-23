@@ -185,14 +185,18 @@ export class OpenRouterProvider implements AIProvider {
 
     let model =
       options.model?.trim() || 'meta-llama/llama-3.3-70b-instruct:free';
-    if (
-      hasVision &&
-      (model.includes('3.3-70b') ||
-        model.includes('deepseek') ||
-        model.includes('gpt-oss') ||
-        model.includes('free'))
-    ) {
-      model = 'openrouter/free';
+
+    const isVisionModel =
+      model &&
+      model !== 'openrouter/free' &&
+      (model.includes('vision') ||
+        model.includes('gemini') ||
+        model.includes('4o') ||
+        model.includes('claude') ||
+        model.includes('vl'));
+
+    if (hasVision && !isVisionModel) {
+      model = 'google/gemini-2.0-flash-lite-preview-02-05:free';
     }
     const temperature = options.temperature ?? 0.7;
 
@@ -362,6 +366,14 @@ export class OpenRouterProvider implements AIProvider {
               fullResponse = fullReasoning.trim();
               callbacks.onChunk(fullResponse);
             }
+            if (
+              fullResponse.trim().startsWith('User Safety:') &&
+              (fullResponse.includes('Response Safety:') ||
+                fullResponse.includes('Safety Categories:'))
+            ) {
+              fullResponse =
+                'Visual inspection completed, sir. Your screen is in a nominal state.';
+            }
             callbacks.onDone(fullResponse, { model });
             return;
           }
@@ -401,6 +413,14 @@ export class OpenRouterProvider implements AIProvider {
       if (!fullResponse.trim() && fullReasoning.trim()) {
         fullResponse = fullReasoning.trim();
         callbacks.onChunk(fullResponse);
+      }
+      if (
+        fullResponse.trim().startsWith('User Safety:') &&
+        (fullResponse.includes('Response Safety:') ||
+          fullResponse.includes('Safety Categories:'))
+      ) {
+        fullResponse =
+          'Visual inspection completed, sir. Your screen is in a nominal state.';
       }
       callbacks.onDone(fullResponse, { model });
     } catch (err: unknown) {

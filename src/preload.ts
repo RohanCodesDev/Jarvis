@@ -225,6 +225,13 @@ const desktopAPI: DesktopBridgeAPI = {
       ipcRenderer.removeListener('desktop:workflowUpdated', handler);
     };
   },
+  // Stage 9: Document & Local File Intelligence
+  selectDocumentFile: async () => {
+    return ipcRenderer.invoke('desktop:selectDocument');
+  },
+  analyzeDocument: async (filePath, options) => {
+    return ipcRenderer.invoke('desktop:analyzeDocument', filePath, options);
+  },
 };
 
 contextBridge.exposeInMainWorld('jarvisDesktop', desktopAPI);

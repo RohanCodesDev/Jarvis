@@ -114,7 +114,9 @@ describe('Multimodal Screen Vision & Desktop Awareness', () => {
       );
 
       expect(capturedBody).toBeDefined();
-      expect(capturedBody.model).toBe('openrouter/free');
+      expect(capturedBody.model).toBe(
+        'google/gemini-2.0-flash-lite-preview-02-05:free',
+      );
       const userMsg = capturedBody.messages.find((m: any) => m.role === 'user');
       expect(Array.isArray(userMsg.content)).toBe(true);
       expect(userMsg.content[1].type).toBe('image_url');

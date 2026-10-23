@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef, useEffect } from 'react';
 import type { ChatMessage, AssistantState } from '../../types/hud';
 import { useTypewriter } from '../hooks/useTypewriter';
 
@@ -13,20 +13,42 @@ export const TacticalDialogueStream: React.FC<TacticalDialogueStreamProps> = ({
   previousMessage,
   assistantState,
 }) => {
-  // Determine active text to display with typewriter animation
-  let activeText =
-    latestMessage?.text ||
-    'Hello sir. Systems are online and ready for your command.';
+  const scrollRef = useRef<HTMLDivElement>(null);
 
-  if (assistantState === 'thinking') {
-    activeText = 'Thinking... Processing your request.';
+  // Check if message is actively streaming tokens
+  const isStreaming = latestMessage?.status === 'sending';
+  const hasJarvisText =
+    latestMessage?.sender === 'jarvis' && !!latestMessage.text;
+
+  // Determine active text to display
+  let activeText = '';
+  if (hasJarvisText) {
+    activeText = latestMessage.text;
+  } else if (assistantState === 'thinking') {
+    activeText = 'Scanning optical feed & analyzing visual buffers...';
   } else if (assistantState === 'listening') {
     activeText = 'Listening... Speak your command.';
   } else if (assistantState === 'error') {
-    activeText = 'Alert. Defensive protocol simulated.';
+    activeText = 'Alert. Visual receptor stream error.';
+  } else {
+    activeText =
+      latestMessage?.text ||
+      'Hello sir. Systems are online and ready for your command.';
   }
 
-  const { displayedText, cursorVisible, isTyping } = useTypewriter(activeText);
+  // Typewriter for static transitions, but bypass for active live token streaming so text shows immediately
+  const { displayedText, cursorVisible, isTyping } = useTypewriter(
+    isStreaming ? '' : activeText,
+  );
+
+  const textToShow = isStreaming ? activeText : displayedText || activeText;
+
+  // Auto-scroll to follow cursor as text streams
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [textToShow]);
 
   // Identify operator query
   const operatorText =
@@ -73,10 +95,10 @@ export const TacticalDialogueStream: React.FC<TacticalDialogueStreamProps> = ({
           </span>
         </div>
 
-        <div className="hacker-typewriter-body">
-          <span className="hacker-body-text">{displayedText}</span>
+        <div className="hacker-typewriter-body" ref={scrollRef}>
+          <span className="hacker-body-text">{textToShow}</span>
           <span
-            className={`hacker-cursor ${cursorVisible || isTyping ? 'visible' : 'hidden'}`}
+            className={`hacker-cursor ${cursorVisible || isStreaming || isTyping ? 'visible' : 'hidden'}`}
           >
             █
           </span>

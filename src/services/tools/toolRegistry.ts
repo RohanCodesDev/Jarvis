@@ -22,6 +22,7 @@ import { getDisplayBrightness, setDisplayBrightness } from './brightnessTools';
 import { closeApprovedApp } from './appCloser';
 import { executeDirectSearch, type SearchPlatform } from './directSearchTools';
 import { addQuickNote, readQuickNotes } from './noteTools';
+import { analyzeDocumentFile } from './documentReaderTool';
 
 export class ToolRegistry {
   private tools = new Map<string, ToolDefinition<any>>();
@@ -463,6 +464,22 @@ export class ToolRegistry {
         return { success: false, message: 'Invalid action requested.' };
       },
     });
+
+    // 17. Analyze Document Intelligence
+    this.registerTool({
+      id: 'analyze_document',
+      name: 'Document Intelligence & Synthesis',
+      description:
+        'Analyzes multi-format documents (PDF, TXT, MD, JSON, CSV, LOG, JS, TS, PY, HTML, CSS, SQL, YAML) to produce an executive briefing and structural breakdown.',
+      permission: 'low_risk',
+      schema: z.object({
+        filePath: z.string().min(1, 'File path is required'),
+        query: z.string().optional(),
+      }),
+      execute: async (args: { filePath: string; query?: string }) => {
+        return await analyzeDocumentFile(args.filePath, { query: args.query });
+      },
+    });
   }
 
   public registerTool<T>(tool: ToolDefinition<T>): void {
@@ -613,7 +630,11 @@ You have access to safe, sandboxed desktop tools. When the user requests an acti
 
 13. quick_note: Add or read quick notes on Desktop.
     - [ACTION: quick_note {"action": "add", "content": "Meeting at 4pm"}]
-    - [ACTION: quick_note {"action": "read"}]`;
+    - [ACTION: quick_note {"action": "read"}]
+
+14. analyze_document: Perform comprehensive multi-format document analysis and executive summary on PDF, code, or text files.
+    - [ACTION: analyze_document {"filePath": "C:/Users/.../contract.pdf"}]
+    - [ACTION: analyze_document {"filePath": "app.ts", "query": "What are the security vulnerabilities?"}]`;
   }
 }
 

@@ -77,6 +77,35 @@ export function detectDirectIntent(input: string): DetectedAction | null {
     };
   }
 
+  // 0.2 Document Intelligence & Analysis
+  // e.g. "summarize document report.pdf", "analyze file C:/docs/paper.pdf", "read and summarize contract.pdf"
+  const docAnalyzeMatch = clean.match(
+    /^(?:please\s+)?(?:summarize|analyze|read\s+and\s+summarize|review|explain|inspect)\s+(?:the\s+)?(?:document|file|pdf|code|doc|paper)\s+["'“]?([a-zA-Z0-9_\-./\\:\s]+?\.(?:pdf|txt|md|json|csv|log|js|jsx|ts|tsx|py|html|css|sql|yaml|yml|xml|rtf))["'”]?\s*(?:(?:focusing\s+on|about|regarding|query|with\s+query)\s+["'“]?([\s\S]+?)["'”]?)?$/i,
+  );
+  if (docAnalyzeMatch && docAnalyzeMatch[1]) {
+    const rawPath = docAnalyzeMatch[1].trim();
+    const query = docAnalyzeMatch[2] ? docAnalyzeMatch[2].trim() : undefined;
+    return {
+      toolId: 'analyze_document',
+      args: { filePath: rawPath, ...(query ? { query } : {}) },
+      confidence: 'high',
+    };
+  }
+
+  // Direct file extension match e.g. "summarize report.pdf", "read and summarize meeting.md"
+  const directDocMatch = clean.match(
+    /^(?:please\s+)?(?:summarize|analyze|read\s+and\s+summarize|review|explain|inspect)\s+["'“]?([a-zA-Z0-9_\-./\\:\s]+?\.(?:pdf|txt|md|json|csv|log|js|jsx|ts|tsx|py|html|css|sql|yaml|yml|xml|rtf))["'”]?\s*(?:(?:focusing\s+on|about|regarding|with\s+query)\s+["'“]?([\s\S]+?)["'”]?)?$/i,
+  );
+  if (directDocMatch && directDocMatch[1]) {
+    const rawPath = directDocMatch[1].trim();
+    const query = directDocMatch[2] ? directDocMatch[2].trim() : undefined;
+    return {
+      toolId: 'analyze_document',
+      args: { filePath: rawPath, ...(query ? { query } : {}) },
+      confidence: 'high',
+    };
+  }
+
   const lower = clean.toLowerCase();
 
   // 1a. Multimodal Screen Vision & Inspection

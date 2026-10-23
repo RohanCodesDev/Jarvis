@@ -7,6 +7,7 @@ import {
   Menu,
   Notification,
   nativeImage,
+  dialog,
   type IpcMainInvokeEvent,
 } from 'electron';
 import path from 'node:path';
@@ -66,6 +67,7 @@ import type { ExecutionPlan } from './services/agent/agentTypes';
 import { globalReminderService } from './services/scheduler/reminderService';
 import { getTopWindowTitles } from './services/tools/screenCaptureTool';
 import { globalWorkflowEngine } from './services/automation/workflowEngine';
+import { analyzeDocumentFile } from './services/tools/documentReaderTool';
 
 function setupIpcHandlers() {
   ipcMain.handle('desktop:getSystemInfo', async (event) => {
@@ -325,6 +327,12 @@ function setupIpcHandlers() {
       }>;
       model?: string;
       screenCaptureDataUrl?: string;
+      attachedDocument?: {
+        fileName: string;
+        filePath: string;
+        summary: string;
+        excerpt?: string;
+      };
     };
 
     if (!data.streamId || !data.message) {
@@ -344,6 +352,14 @@ function setupIpcHandlers() {
     const directAction = !multiPlan ? detectDirectIntent(data.message) : null;
 
     let searchContext: string | undefined;
+
+    // Stage 9: Inject attached active document context if present
+    if (data.attachedDocument) {
+      const docHeader = `[ATTACHED ACTIVE DOCUMENT: "${data.attachedDocument.fileName}" (${data.attachedDocument.filePath})\nEXECUTIVE INTELLIGENCE BRIEFING:\n${data.attachedDocument.summary}\n${data.attachedDocument.excerpt ? `\nEXCERPT:\n${data.attachedDocument.excerpt}` : ''}]`;
+      searchContext = searchContext
+        ? `${docHeader}\n\n${searchContext}`
+        : docHeader;
+    }
 
     // Inject active desktop window context if available
     try {
@@ -899,6 +915,83 @@ function setupIpcHandlers() {
       const query =
         typeof prompt === 'string' ? prompt : 'Inspect desktop screen';
       return globalToolRegistry.executeTool('analyze_screen', { query });
+    },
+  );
+
+  // Stage 9: Document & Local File Intelligence
+  ipcMain.handle('desktop:selectDocument', async (event) => {
+    if (!isValidSender(event)) throw new Error('Unauthorized IPC sender');
+    if (!mainWindow) return { canceled: true };
+    const result = await dialog.showOpenDialog(mainWindow, {
+      title: 'Select Document for JARVIS Intelligence Synthesis',
+      properties: ['openFile'],
+      filters: [
+        {
+          name: 'Documents & Code',
+          extensions: [
+            'pdf',
+            'txt',
+            'md',
+            'json',
+            'csv',
+            'log',
+            'js',
+            'jsx',
+            'ts',
+            'tsx',
+            'py',
+            'html',
+            'css',
+            'sql',
+            'yaml',
+            'yml',
+            'xml',
+            'rtf',
+          ],
+        },
+        { name: 'PDF Documents (*.pdf)', extensions: ['pdf'] },
+        { name: 'Markdown & Text (*.md, *.txt)', extensions: ['md', 'txt'] },
+        {
+          name: 'Source Code & Scripts',
+          extensions: ['js', 'ts', 'tsx', 'jsx', 'py', 'sql', 'html', 'css'],
+        },
+        {
+          name: 'Data Files (*.json, *.csv, *.yaml)',
+          extensions: ['json', 'csv', 'yaml', 'yml'],
+        },
+        { name: 'All Files', extensions: ['*'] },
+      ],
+    });
+
+    if (result.canceled || result.filePaths.length === 0) {
+      return { canceled: true };
+    }
+
+    const selected = result.filePaths[0];
+    return {
+      canceled: false,
+      filePath: selected,
+      fileName: path.basename(selected),
+    };
+  });
+
+  ipcMain.handle(
+    'desktop:analyzeDocument',
+    async (
+      event,
+      filePath: unknown,
+      options?: { query?: string; useAI?: boolean },
+    ) => {
+      if (!isValidSender(event)) throw new Error('Unauthorized IPC sender');
+      if (typeof filePath !== 'string' || !filePath.trim()) {
+        return {
+          success: false,
+          message: 'File path must be a non-empty string.',
+          error: 'Invalid file path',
+          durationMs: 0,
+        };
+      }
+      return await analyzeDocumentFile(filePath, options);
     },
   );
 }

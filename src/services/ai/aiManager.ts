@@ -1,4 +1,5 @@
 import {
+  type AIMessage,
   type AIModelInfo,
   type AIProvider,
   type SendMessageOptions,
@@ -133,7 +134,7 @@ export class AIManager {
             modelToUse.includes('vl') ||
             modelToUse.includes('4o'));
         if (!isVisionCapable) {
-          modelToUse = 'meta-llama/llama-3.2-11b-vision-instruct:free';
+          modelToUse = 'google/gemini-2.0-flash-lite-preview-02-05:free';
         }
       } else if (provider === this.ollamaProvider) {
         const isOllamaVision =
@@ -231,6 +232,59 @@ export class AIManager {
       controller.abort();
       this.activeStreams.delete(streamId);
     }
+  }
+
+  /**
+   * Generate a one-shot completion without manual stream handling.
+   */
+  public async generateCompletion(
+    prompt: string,
+    options: {
+      systemPrompt?: string;
+      model?: string;
+      timeoutMs?: number;
+    } = {},
+  ): Promise<string> {
+    const streamId =
+      'comp-' + Date.now() + '-' + Math.random().toString(36).substring(2, 7);
+
+    return new Promise((resolve, reject) => {
+      let accumulated = '';
+      const timer = options.timeoutMs
+        ? setTimeout(() => {
+            this.cancelStream(streamId);
+            reject(new Error(`Completion timed out after ${options.timeoutMs}ms`));
+          }, options.timeoutMs)
+        : null;
+
+      const msgs: AIMessage[] = [];
+      if (options.systemPrompt) {
+        msgs.push({ role: 'system', content: options.systemPrompt });
+      }
+      msgs.push({ role: 'user', content: prompt });
+
+      this.streamChat(
+        streamId,
+        {
+          messages: msgs,
+          model: options.model,
+        },
+        (chunk) => {
+          accumulated += chunk;
+        },
+        (full) => {
+          if (timer) clearTimeout(timer);
+          resolve(full || accumulated);
+        },
+        (err) => {
+          if (timer) clearTimeout(timer);
+          reject(new Error(err));
+        },
+      ).catch((err) => {
+        if (timer) clearTimeout(timer);
+        reject(err);
+      });
+    });
   }
 }
 

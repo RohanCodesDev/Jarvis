@@ -108,6 +108,12 @@ export interface DesktopBridgeAPI {
       }>;
       model?: string;
       screenCaptureDataUrl?: string;
+      attachedDocument?: {
+        fileName: string;
+        filePath: string;
+        summary: string;
+        excerpt?: string;
+      };
     },
     onChunk: (event: ChatStreamChunkEvent) => void,
   ) => () => void;
@@ -216,6 +222,16 @@ export interface DesktopBridgeAPI {
       workflow: import('../services/automation/workflowTypes').WorkflowItem,
     ) => void,
   ) => () => void;
+  // Stage 9: Document & Local File Intelligence
+  selectDocumentFile?: () => Promise<{
+    canceled: boolean;
+    filePath?: string;
+    fileName?: string;
+  }>;
+  analyzeDocument?: (
+    filePath: string,
+    options?: { query?: string; useAI?: boolean },
+  ) => Promise<import('../services/tools/toolTypes').ToolExecutionResult>;
 }
 
 declare global {

@@ -11,7 +11,10 @@ import type {
 
 import { Header } from './header/Header';
 import { AssistantOrb } from './orb/AssistantOrb';
-import { CommandDock } from './controls/CommandDock';
+import {
+  CommandDock,
+  type ActiveAttachedDocument,
+} from './controls/CommandDock';
 import { QuickDirectiveChips } from './controls/QuickDirectiveChips';
 import { AcousticWaveformRibbon } from './controls/AcousticWaveformRibbon';
 import { TacticalDialogueStream } from './hud/TacticalDialogueStream';
@@ -108,6 +111,11 @@ export const JarvisHUD: React.FC = () => {
       createdAt: '2026-10-12 11:43',
     },
   ]);
+
+  // Stage 9: Document & Local File Intelligence state
+  const [activeDocument, setActiveDocument] =
+    useState<ActiveAttachedDocument | null>(null);
+  const [isDraggingFile, setIsDraggingFile] = useState(false);
 
   const speechTimeoutRef = useRef<number | null>(null);
   const streamCleanupRef = useRef<(() => void) | null>(null);
@@ -563,6 +571,14 @@ export const JarvisHUD: React.FC = () => {
           history,
           model: modelToSend,
           screenCaptureDataUrl,
+          attachedDocument: activeDocument
+            ? {
+                fileName: activeDocument.fileName,
+                filePath: activeDocument.filePath,
+                summary: activeDocument.summary,
+                excerpt: activeDocument.excerpt,
+              }
+            : undefined,
         },
         (event) => {
           if (event.chunk) {
@@ -701,6 +717,131 @@ export const JarvisHUD: React.FC = () => {
 
     handleSendMessage(prompt, capturedDataUrl);
   };
+
+  const handleProcessDocumentFile = useCallback(
+    async (filePath: string, query?: string) => {
+      if (!window.jarvisDesktop?.analyzeDocument) {
+        addActivity('warn', 'tool', 'Document intelligence engine not available.');
+        return;
+      }
+
+      setAssistantState('thinking');
+      const baseName = filePath.split(/[/\\]/).pop() || filePath;
+      addActivity(
+        'info',
+        'tool',
+        `Synthesizing document intelligence: "${baseName}"...`,
+      );
+
+      const startTime = performance.now();
+      try {
+        const res = await window.jarvisDesktop.analyzeDocument(filePath, {
+          query,
+        });
+        const elapsed = Math.round(performance.now() - startTime);
+
+        if (!res.success || !res.data) {
+          throw new Error(res.error || res.message || 'Analysis failed');
+        }
+
+        const data = res.data as {
+          metadata: {
+            fileName: string;
+            filePath: string;
+            wordCount: number;
+            pageCount?: number;
+          };
+          summary: {
+            overview: string;
+            executiveSummary: string;
+            keyFindings: string[];
+            sectionBreakdown: any[];
+            actionableInsights: string[];
+          };
+          formattedReport: string;
+          excerpt?: string;
+        };
+
+        const attached: ActiveAttachedDocument = {
+          fileName: data.metadata.fileName,
+          filePath: data.metadata.filePath,
+          summary: data.formattedReport,
+          excerpt: data.excerpt,
+          wordCount: data.metadata.wordCount,
+          pageCount: data.metadata.pageCount,
+        };
+
+        setActiveDocument(attached);
+
+        // Add JARVIS message with the complete executive briefing report
+        const briefingMsg: ChatMessage = {
+          id: 'doc-briefing-' + Date.now(),
+          sender: 'jarvis',
+          text: data.formattedReport,
+          timestamp: new Date().toLocaleTimeString('en-US', { hour12: false }),
+          metadata: {
+            durationMs: elapsed,
+          },
+        };
+        setMessages((prev) => [...prev, briefingMsg]);
+
+        addActivity(
+          'success',
+          'tool',
+          `Document synthesized: "${data.metadata.fileName}" (${data.metadata.wordCount.toLocaleString()} words, ${elapsed}ms)`,
+        );
+
+        // Vocal executive briefing acknowledgement
+        const commentary = `Executive intelligence briefing ready for ${data.metadata.fileName}, sir. ${data.summary.overview}. What aspect would you like to review?`;
+        if (telemetry.speakerEnabled && settings.speechEnabled) {
+          voiceCoordinatorRef.current.speak(
+            commentary,
+            {
+              onStateChange: (st) => {
+                if (st === 'speaking') setAssistantState('speaking');
+                else if (st === 'idle') setAssistantState('idle');
+              },
+              onError: (err: string) => {
+                addActivity('warn', 'voice', err);
+              },
+            },
+            {
+              voiceGender: settings.voiceGender,
+              rate: 1.05,
+              pitch: 0.96,
+            },
+          );
+        } else {
+          setAssistantState('idle');
+        }
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        addActivity('error', 'tool', `Document analysis failed: ${msg}`);
+        const errMsg: ChatMessage = {
+          id: 'doc-err-' + Date.now(),
+          sender: 'jarvis',
+          text: `⚠️ Document analysis failed for "${baseName}": ${msg}`,
+          timestamp: new Date().toLocaleTimeString('en-US', { hour12: false }),
+        };
+        setMessages((prev) => [...prev, errMsg]);
+        setAssistantState('idle');
+      }
+    },
+    [addActivity, settings, telemetry.speakerEnabled],
+  );
+
+  const handleSelectDocument = useCallback(async () => {
+    if (!window.jarvisDesktop?.selectDocumentFile) return;
+    try {
+      const res = await window.jarvisDesktop.selectDocumentFile();
+      if (!res.canceled && res.filePath) {
+        await handleProcessDocumentFile(res.filePath);
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      addActivity('warn', 'tool', `Document selection cancelled: ${msg}`);
+    }
+  }, [handleProcessDocumentFile, addActivity]);
 
   const handleVoiceInputTrigger = () => {
     if (assistantState === 'listening') {
@@ -942,10 +1083,47 @@ export const JarvisHUD: React.FC = () => {
 
   return (
     <div
-      className={`hud-container theme-${currentTheme}`}
+      className={`hud-container theme-${currentTheme} ${isDraggingFile ? 'file-drag-active' : ''}`}
       data-theme={currentTheme}
+      onDragOver={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!isDraggingFile) setIsDraggingFile(true);
+      }}
+      onDragLeave={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDraggingFile(false);
+      }}
+      onDrop={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDraggingFile(false);
+        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+          const dropped = e.dataTransfer.files[0];
+          const filePath = (dropped as any).path;
+          if (filePath) {
+            handleProcessDocumentFile(filePath);
+          }
+        }
+      }}
     >
       <div className="scanline-overlay" />
+
+      {/* Holographic Document Drag & Drop Ingestion Overlay */}
+      {isDraggingFile && (
+        <div className="hud-file-dropzone-overlay">
+          <div className="dropzone-glow-box">
+            <span className="dropzone-icon">📄</span>
+            <div className="dropzone-title">
+              DROP DOCUMENT FOR EXECUTIVE INTELLIGENCE
+            </div>
+            <div className="dropzone-subtitle">
+              Supports PDF, Code, Markdown, Data & Logs (Up to 5MB)
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 1. Clean Minimal Header */}
       <Header
@@ -1021,6 +1199,12 @@ export const JarvisHUD: React.FC = () => {
             onSendMessage={handleSendMessage}
             onVoiceTrigger={handleVoiceInputTrigger}
             onInspectScreen={handleInspectScreen}
+            attachedDocument={activeDocument}
+            onSelectDocument={handleSelectDocument}
+            onEjectDocument={() => {
+              setActiveDocument(null);
+              addActivity('info', 'tool', 'Active document ejected.');
+            }}
           />
         </div>
       </main>
